@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>⚔️ Arène Pokémon</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+    background: linear-gradient(160deg,#1a2a6c,#2a5298 60%,#7db9e8);
+    min-height:100vh; color:#fff; padding:20px;
+  }
+  h1 { text-align:center; font-size:2.2em; text-shadow:2px 2px 4px rgba(0,0,0,.5); margin-bottom:6px; }
+  .subtitle { text-align:center; opacity:.85; margin-bottom:20px; }
+  .screen {
+    max-width:1000px; margin:0 auto; background:rgba(0,0,0,.35);
+    border-radius:20px; padding:20px; box-shadow:0 10px 40px rgba(0,0,0,.4);
+  }
+  /* ---------- Sélection ---------- */
+  .pick-zone { display:flex; gap:15px; margin-bottom:15px; }
+  .pick-box { flex:1; background:rgba(255,255,255,.08); border-radius:14px; padding:15px; text-align:center; }
+  .pick-box h3 { margin-bottom:10px; }
+  input[type=text] {
+    width:100%; padding:10px 14px; border-radius:24px; border:none; outline:none;
+    font-size:1em; background:#fff; color:#333;
+  }
+  .sprite {
+    width:110px; height:110px; image-rendering:pixelated; margin-top:8px;
+    filter:drop-shadow(0 4px 6px rgba(0,0,0,.4));
+  }
+  .types { margin-top:6px; display:flex; gap:6px; justify-content:center; }
+  .type-badge { padding:3px 12px; border-radius:12px; font-size:.8em; font-weight:bold; text-shadow:1px 1px 2px rgba(0,0,0,.4); }
+  .stats { font-size:.85em; margin-top:8px; line-height:1.6; text-align:left; }
+  .btn {
+    background:linear-gradient(#ffcc00,#ff9900); color:#5a3200; border:none;
+    padding:12px 28px; font-size:1.05em; font-weight:bold; border-radius:30px;
+    cursor:pointer; box-shadow:0 4px 10px rgba(0,0,0,.35); transition:transform .1s;
+  }
+  .btn:hover { transform:scale(1.05); }
+  .btn:disabled { opacity:.4; cursor:not-allowed; transform:none; }
+  .btn-gray { background:linear-gradient(#ccc,#999); color:#333; }
+  .btn-small { padding:7px 16px; font-size:.9em; border-radius:20px; }
+  .actions { text-align:center; margin:10px 0; display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+  .random-btn { background:linear-gradient(#8f8fff,#5555cc); color:#fff; }
+  /* ---------- Personnalisation ---------- */
+  .customize {
+    background:rgba(0,0,0,.3); border:2px solid rgba(255,255,255,.25);
+    border-radius:14px; padding:16px; margin-top:15px; text-align:left; display:none;
+  }
+  .customize h3 { text-align:center; margin-bottom:12px; }
+  .cust-grid { display:flex; gap:24px; flex-wrap:wrap; }
+  .cust-col { flex:1; min-width:270px; }
+  .cust-col h4 { margin-bottom:8px; color:#ffdd55; }
+  .lvl-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .lvl-row input[type=range] { flex:1; }
+  .stat-rows { display:grid; grid-template-columns:1fr 1fr; gap:7px; margin-top:6px; }
+  .stat-rows label { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:.9em; }
+  .stat-rows input[type=number] {
+    width:74px; padding:5px 7px; border-radius:8px; border:none;
+    background:#fff; color:#333; font-size:.95em;
+  }
+  .fin-stats { font-size:.85em; margin-top:10px; line-height:1.6; opacity:.95; }
+  .move-sel {
+    width:100%; padding:8px 10px; border-radius:8px; margin-bottom:8px;
+    background:#fff; color:#333; border:none; font-size:.92em; cursor:pointer;
+  }
+  .add-move-row { display:flex; gap:8px; margin-top:10px; }
+  .add-move-row input { flex:1; padding:8px 12px; border-radius:20px; border:none; font-size:.9em; }
+  .hint { font-size:.8em; opacity:.7; margin-top:8px; line-height:1.5; }
+  /* ---------- Combat ---------- */
+  #battle { display:none; }
+  .arena {
+    position:relative; height:330px; border-radius:14px; overflow:hidden;
+    background:linear-gradient(#aee2ff 0 55%, #8fce6e 55% 75%, #6db04c 75%);
+  }
+  .foe-side { position:absolute; top:18px; right:24px; text-align:center; }
+  .you-side { position:absolute; bottom:10px; left:24px; text-align:center; }
+  .battle-sprite { width:150px; height:150px; image-rendering:pixelated; filter:drop-shadow(0 6px 8px rgba(0,0,0,.4)); }
+  .you-side .battle-sprite { transform:scaleX(1.25); }
+  .hpbar-wrap {
+    background:#333; border-radius:10px; padding:5px 10px; width:220px; margin:0 auto 6px;
+    border:2px solid #fff; font-size:.8em;
+  }
+  .hp-name { display:flex; justify-content:space-between; font-weight:bold; }
+  .hp-track { background:#555; border-radius:6px; height:10px; margin-top:4px; overflow:hidden; }
+  .hp-fill { height:100%; background:linear-gradient(#7ee87e,#3cb43c); transition:width .6s, background .6s; }
+  .hp-fill.mid { background:linear-gradient(#ffe066,#e6b800); }
+  .hp-fill.low { background:linear-gradient(#ff7b7b,#d63031); }
+  .log {
+    background:rgba(0,0,0,.5); border-radius:12px; padding:12px 16px; height:120px;
+    overflow-y:auto; margin:14px 0; font-size:.95em; line-height:1.6; border:2px solid rgba(255,255,255,.2);
+  }
+  .moves { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+  .move-btn {
+    padding:14px; border-radius:12px; border:3px solid rgba(255,255,255,.5); cursor:pointer;
+    font-size:1em; font-weight:bold; color:#fff; text-shadow:1px 1px 2px rgba(0,0,0,.5);
+    transition:transform .1s, filter .15s;
+  }
+  .move-btn:hover:not(:disabled) { transform:scale(1.04); filter:brightness(1.15); }
+  .move-btn:disabled { opacity:.35; cursor:not-allowed; }
+  .move-info { display:block; font-size:.75em; font-weight:normal; opacity:.9; margin-top:3px; }
+  .shake { animation:shake .4s; }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
+  #result {
+    position:absolute; inset:0; display:none; align-items:center; justify-content:center;
+    background:rgba(0,0,0,.65); z-index:5; font-size:2em; font-weight:bold; text-shadow:0 0 20px gold;
+    flex-direction:column; gap:18px; text-align:center;
+  }
+  .msg { font-size:.8em; color:#ffdd55; }
+</style>
+</head>
+<body>
+<h1>⚔️ Arène Pokémon ⚔️</h1>
+<p class="subtitle">Choisis ton Pokémon, personnalise ses stats et ses attaques, puis affronte ton adversaire !</p>
+
+<div class="screen">
+  <!-- ============ SÉLECTION ============ -->
+  <div id="select">
+    <div class="pick-zone">
+      <div class="pick-box">
+        <h3>🧢 Ton Pokémon</h3>
+        <input type="text" id="pick1" placeholder="Nom (ex : pikachu, charizard, mewtwo...)" list="names">
+        <div id="prev1"><p style="opacity:.6;margin-top:14px">En attente de choix...</p></div>
+      </div>
+      <div class="pick-box">
+        <h3>🤖 Adversaire</h3>
+        <input type="text" id="pick2" placeholder="Nom (ou laisse vide = aléatoire)" list="names">
+        <div id="prev2"><p style="opacity:.6;margin-top:14px">En attente de choix...</p></div>
+      </div>
+    </div>
+    <datalist id="names"></datalist>
+
+    <!-- ============ PERSONNALISATION ============ -->
+    <div class="customize" id="customizer">
+      <h3>⚙️ Personnalise ton Pokémon</h3>
+      <div class="cust-grid">
+        <div class="cust-col">
+          <h4>📊 Caractéristiques</h4>
+          <div class="lvl-row">
+            <b>Niveau :</b>
+            <input type="range" id="lvl" min="5" max="100" value="50">
+            <span id="lvlVal" style="font-weight:bold;font-size:1.2em;color:#ffdd55">50</span>
+          </div>
+          <div class="stat-rows">
+            <label>PV <input type="number" id="st-hp" min="1" max="255"></label>
+            <label>Attaque <input type="number" id="st-attack" min="1" max="255"></label>
+            <label>Défense <input type="number" id="st-defense" min="1" max="255"></label>
+            <label>Atq Spé. <input type="number" id="st-special-attack" min="1" max="255"></label>
+            <label>Déf Spé. <input type="number" id="st-special-defense" min="1" max="255"></label>
+            <label>Vitesse <input type="number" id="st-speed" min="1" max="255"></label>
+          </div>
+          <div class="actions" style="justify-content:flex-start;margin:12px 0 0">
+            <button class="btn btn-gray btn-small" id="resetStats">↩ Stats d'origine</button>
+          </div>
+          <div class="fin-stats" id="finStats"></div>
+        </div>
+        <div class="cust-col">
+          <h4>🎯 Attaques (choisis-en 4)</h4>
+          <select class="move-sel" id="mv0"></select>
+          <select class="move-sel" id="mv1"></select>
+          <select class="move-sel" id="mv2"></select>
+          <select class="move-sel" id="mv3"></select>
+          <div class="actions" style="justify-content:flex-start;margin:4px 0">
+            <button class="btn btn-gray btn-small" id="randMoves">🎲 Attaques aléatoires</button>
+          </div>
+          <div class="add-move-row">
+            <input type="text" id="addMove" placeholder="Ajouter une attaque (ex : thunderbolt, earthquake, toxic...)">
+            <button class="btn btn-small" id="addMoveBtn">➕</button>
+          </div>
+          <p class="hint">💡 Par défaut : les attaques que ce Pokémon peut apprendre. Tu peux aussi ajouter n'importe quelle attaque par son nom anglais (thunderbolt, hydro-pump, shadow-ball...). Les attaques de statut (sans puissance) ne sont pas acceptées.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button class="btn" id="startBtn" disabled>▶ Lancer le combat</button>
+      <button class="btn random-btn" id="randomBtn">🎲 Combat aléatoire</button>
+    </div>
+  </div>
+
+  <!-- ============ COMBAT ============ -->
+  <div id="battle">
+    <div class="arena" id="arena">
+      <div class="foe-side">
+        <div class="hpbar-wrap">
+          <div class="hp-name"><span id="foeName">???</span><span id="foeHP"></span></div>
+          <div class="hp-track"><div class="hp-fill" id="foeFill" style="width:100%"></div></div>
+        </div>
+        <img class="battle-sprite" id="foeSprite" src="">
+      </div>
+      <div class="you-side">
+        <img class="battle-sprite" id="youSprite" src="">
+        <div class="hpbar-wrap">
+          <div class="hp-name"><span id="youName">???</span><span id="youHP"></span></div>
+          <div class="hp-track"><div class="hp-fill" id="youFill" style="width:100%"></div></div>
+        </div>
+      </div>
+      <div id="result"><div id="resultText"></div><button class="btn" id="againBtn">🔄 Revanche</button></div>
+    </div>
+    <div class="log" id="log"></div>
+    <div class="moves" id="moves"></div>
+    <div class="actions" style="margin-top:12px">
+      <button class="btn btn-gray" id="fleeBtn">🏃 Fuir</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'https://pokeapi.co/api/v2';
+const TYPE_COLORS = {
+  normal:'#A8A878', feu:'#EE8130', eau:'#6390F0', électrik:'#F7D02C', plante:'#7AC74C', glace:'#96D9D6',
+  combat:'#C22E28', poison:'#A33EA1', sol:'#E2BF65', vol:'#A98FF3', psy:'#F95587', insecte:'#A6B91A',
+  roche:'#B6A136', spectre:'#735797', dragon:'#6F35FC', ténèbres:'#705746', acier:'#B7B7CE', fée:'#D685AD'
+};
+const FR = {
+  hp:'PV', attack:'Attaque', defense:'Défense', 'special-attack':'Atq Spé.', 'special-defense':'Déf Spé.', speed:'Vitesse'
+};
+const STAT_KEYS = ['hp','attack','defense','special-attack','special-defense','speed'];
+const TYPE_FR = { normal:'normal', fire:'feu', water:'eau', electric:'électrik', grass:'plante', ice:'glace',
+  fighting:'combat', poison:'poison', ground:'sol', flying:'vol', psychic:'psy', bug:'insecte', rock:'roche',
+  ghost:'spectre', dragon:'dragon', dark:'ténèbres', steel:'acier', fairy:'fée' };
+const EFF = {
+  feu:{plante:2,glace:2,insecte:2,acier:2,feu:.5,eau:.5,roche:.5,dragon:.5},
+  eau:{feu:2,sol:2,roche:2,eau:.5,plante:.5,dragon:.5},
+  plante:{eau:2,sol:2,roche:2,feu:.5,plante:.5,poison:.5,vol:.5,insecte:.5,dragon:.5,acier:.5},
+  électrik:{eau:2,vol:2,électrik:.5,plante:.5,dragon:.5,sol:0},
+  glace:{plante:2,sol:2,vol:2,dragon:2,feu:.5,eau:.5,glace:.5,acier:.5},
+  combat:{normal:2,glace:2,roche:2,ténèbres:2,acier:2,poison:.5,vol:.5,psy:.5,insecte:.5,fée:.5,spectre:0},
+  poison:{plante:2,fée:2,poison:.5,sol:.5,roche:.5,spectre:.5,acier:0},
+  sol:{feu:2,électrik:2,poison:2,roche:2,acier:2,plante:.5,insecte:.5,vol:0},
+  vol:{plante:2,combat:2,insecte:2,électrik:.5,roche:.5,acier:.5},
+  psy:{combat:2,poison:2,psy:.5,acier:.5,ténèbres:0},
+  insecte:{plante:2,psy:2,ténèbres:2,feu:.5,combat:.5,poison:.5,vol:.5,spectre:.5,acier:.5,fée:.5},
+  roche:{feu:2,glace:2,vol:2,insecte:2,combat:.5,sol:.5,acier:.5},
+  spectre:{spectre:2,psy:2,ténèbres:.5,normal:0},
+  dragon:{dragon:2,acier:.5,fée:0},
+  ténèbres:{psy:2,spectre:2,combat:.5,ténèbres:.5,fée:.5},
+  acier:{glace:2,roche:2,fée:2,feu:.5,eau:.5,électrik:.5,acier:.5},
+  fée:{combat:2,dragon:2,ténèbres:2,feu:.5,poison:.5,acier:.5},
+  normal:{roche:.5,acier:.5,spectre:0}
+};
+const MOVES_FR = { 'thunderbolt':'Tonnerre','flamethrower':'Lance-Flammes','water-gun':'Pistolet à O','tackle':'Charge',
+  'scratch':'Griffe','ember':'Flammèche','vine-whip':'Fouet Lianes','quick-attack':'Vive-Attaque','body-slam':'Écras\'Face',
+  'psybeam':'Rafale Psy','ice-beam':'Laser Glace','earthquake':'Séisme','hyper-beam':'Ultralaser','surf':'Surf',
+  'fire-blast':'Déflagration','thunder':'Fatal-Foudre','blizzard':'Blizzard','shadow-ball':'Ball\'Ombre','dragon-claw':'Draco-Griffe',
+  'slash':'Tranche','bite':'Morsure','confuse-ray':'Onde Folie','growl':'Rugissement','tail-whip':'Mimi-Queue','recover':'Récupération'};
+
+let allNames = [];
+let fighter1 = null, fighter2 = null;
+let you, foe, yourTurn = true, gameOver = false;
+let pickToken = 0;
+
+async function loadNames(){
+  const r = await fetch(API + '/pokemon?limit=600');
+  const d = await r.json();
+  allNames = d.results.map(p => p.name);
+  document.getElementById('names').innerHTML = allNames.map(n=>`<option value="${n}">`).join('');
+}
+
+function frType(t){ return TYPE_FR[t] || t; }
+
+async function fetchPokemon(name){
+  const r = await fetch(`${API}/pokemon/${name.toLowerCase().trim()}`);
+  if(!r.ok) throw new Error('not found');
+  return r.json();
+}
+
+const moveCache = new Map();
+function fetchMoveCached(url){
+  if(!moveCache.has(url)) moveCache.set(url, fetch(url).then(r => r.json()));
+  return moveCache.get(url);
+}
+
+function frMoveName(m){
+  const f = m.names.find(n => n.language.name === 'fr');
+  if(f) return f.name;
+  return MOVES_FR[m.name] || m.name.replace(/-/g,' ');
+}
+
+function moveObj(mv){
+  return {
+    name: frMoveName(mv),
+    type: frType(mv.type.name),
+    power: mv.power,
+    accuracy: mv.accuracy || 100,
+    damageClass: mv.damage_class.name,
+    key: mv.name
+  };
+}
+
+function applyStats(f){
+  const L = f.level;
+  f.maxHP = Math.floor(2 * f.base.hp * L / 100) + L + 10;
+  f.hp = f.maxHP;
+  f.atk  = Math.floor(2 * f.base.attack  * L / 100) + 5;
+  f.def  = Math.floor(2 * f.base.defense * L / 100) + 5;
+  f.spa  = Math.floor(2 * f.base['special-attack']  * L / 100) + 5;
+  f.spd  = Math.floor(2 * f.base['special-defense'] * L / 100) + 5;
+  f.speed = Math.floor(2 * f.base.speed * L / 100) + 5;
+}
+
+function buildFighter(data, level){
+  const stats = {};
+  data.stats.forEach(s => stats[s.stat.name] = s.base_stat);
+  const f = {
+    name: data.name.charAt(0).toUpperCase() + data.name.slice(1),
+    types: data.types.map(t => frType(t.type.name)),
+    sprite: data.sprites.front_default || data.sprites.front_shiny,
+    backSprite: data.sprites.back_default || data.sprites.front_default,
+    base: stats,
+    level: level,
+    learnset: null,
+    moves: []
+  };
+  applyStats(f);
+  return f;
+}
+
+// Attaques automatiques (utilisées tant que l'utilisateur n'a rien choisi)
+async function autoMoves(f){
+  const damaging = f.rawMoves || [];
+  const picks = [];
+  const shuffled = [...damaging].sort(()=>Math.random()-.5);
+  for(const url of shuffled){
+    if(picks.length >= 4) break;
+    try{
+      const mv = await fetchMoveCached(url);
+      if(mv.power && mv.damage_class.name !== 'status') picks.push(mv);
+    }catch(e){}
+  }
+  while(picks.length < 4){
+    const mv = await fetchMoveCached(`${API}/move/${['tackle','scratch','quick-attack','body-slam'][picks.length]}`);
+    picks.push(mv);
+  }
+  f.moves = picks.map(moveObj);
+}
+
+// Construit le learnset complet (attaques avec puissance) d'un Pokémon
+async function buildLearnset(rawMoves){
+  const urls = [...new Set(rawMoves)];
+  const out = [];
+  for(let i = 0; i < urls.length; i += 40){
+    const batch = await Promise.all(urls.slice(i, i+40).map(u => fetchMoveCached(u).catch(()=>null)));
+    for(const mv of batch){
+      if(mv && mv.power && mv.damage_class.name !== 'status') out.push(mv);
+    }
+  }
+  return out;
+}
+
+function badge(t){
+  return `<span class="type-badge" style="background:${TYPE_COLORS[t]||'#888'}">${t}</span>`;
+}
+
+function previewHTML(f){
+  return `
+    <img class="sprite" src="${f.sprite}" alt="${f.name}">
+    <div><b style="font-size:1.1em">${f.name}</b> <span style="opacity:.8">N.${f.level}</span></div>
+    <div class="types">${f.types.map(badge).join('')}</div>
+    <div class="stats">
+      ${FR.hp} : ${f.maxHP} · ${FR.attack} : ${f.atk} · ${FR.defense} : ${f.def}<br>
+      ${FR['special-attack']} : ${f.spa} · ${FR['special-defense']} : ${f.spd} · ${FR.speed} : ${f.speed}<br>
+      <span style="opacity:.8">Attaques : ${f.moves.map(m=>m.name).join(', ') || '...'}</span>
+    </div>`;
+}
+
+function checkReady(){
+  document.getElementById('startBtn').disabled = !(fighter1 && fighter2);
+}
+
+// ============ PERSONNALISATION ============
+const customizer = document.getElementById('customizer');
+const lvlInput = document.getElementById('lvl');
+
+function readStatsInputs(){
+  const b = {};
+  for(const k of STAT_KEYS){
+    let v = parseInt(document.getElementById('st-'+k).value, 10);
+    if(isNaN(v)) v = 50;
+    b[k] = Math.min(255, Math.max(1, v));
+  }
+  return b;
+}
+
+function refreshPreview1(){
+  if(!fighter1) return;
+  fighter1.base = readStatsInputs();
+  fighter1.level = parseInt(lvlInput.value, 10);
+  applyStats(fighter1);
+  document.getElementById('prev1').innerHTML = previewHTML(fighter1);
+  const f = fighter1;
+  document.getElementById('finStats').innerHTML =
+    `Au niveau <b>${f.level}</b> → ${FR.hp} : <b>${f.maxHP}</b> · ${FR.attack} : <b>${f.atk}</b> · ${FR.defense} : <b>${f.def}</b> ·  : <b>${f.spa}</b> ·  : <b>${f.spd}</b> · ${FR.speed} : <b>${f.speed}</b>`;
+}
+
+function populateMoveSelects(f){
+  if(!f.learnset) return;
+  const sorted = [...f.learnset].sort((a,b) => (b.power||0)-(a.power||0) || a.name.localeCompare(b.name));
+  const chosen = f.moves.map(m => m.name);
+  for(let i = 0; i < 4; i++){
+    const sel = document.getElementById('mv'+i);
+    sel.innerHTML = sorted.map((m,idx) => {
+      const c = chosen[i] === m.name ? ' selected' : '';
+      return `<option value="${m.name}"${c}>${m.name} — ${m.type} · Puis. ${m.power} · ${m.accuracy}%</option>`;
+    }).join('');
+  }
+}
+
+function movesFromSelects(f){
+  const picks = [];
+  for(let i = 0; i < 4; i++){
+    const v = document.getElementById('mv'+i).value;
+    const m = (f.learnset||[]).find(m => m.name === v);
+    if(m) picks.push(m);
+  }
+  // complète si besoin
+  for(const m of (f.learnset||[])){
+    if(picks.length >= 4) break;
+    if(!picks.includes(m)) picks.push(m);
+  }
+  f.moves = picks.slice(0,4);
+}
+
+function randomMovesFromSelects(f){
+  if(!f.learnset || !f.learnset.length) return;
+  const pool = [...f.learnset].sort(()=>Math.random()-.5).slice(0,4);
+  f.moves = pool;
+  populateMoveSelects(f);
+}
+
+async function loadPlayerPokemon(val){
+  const token = ++pickToken;
+  try{
+    const data = await fetchPokemon(val);
+    if(token !== pickToken) return;
+    const f = buildFighter(data, 50);
+    f.rawMoves = data.moves.map(m => m.move.url);
+    f.rawBase = {...f.base};
+    fighter1 = f;
+
+    // préremplir l'éditeur avec les stats d'origine
+    for(const k of STAT_KEYS) document.getElementById('st-'+k).value = f.base[k];
+    lvlInput.value = 50;
+    document.getElementById('lvlVal').textContent = '50';
+    refreshPreview1();
+    customizer.style.display = 'block';
+
+    // attaques auto pendant le chargement du learnset
+    await autoMoves(f);
+    if(token !== pickToken) return;
+    refreshPreview1();
+
+    // learnset complet
+    const ls = await buildLearnset(f.rawMoves);
+    if(token !== pickToken) return;
+    f.learnset = ls.map(moveObj);
+    populateMoveSelects(f);
+    refreshPreview1();
+    checkReady();
+  }catch(e){
+    if(token !== pickToken) return;
+    fighter1 = null;
+    document.getElementById('prev1').innerHTML = `<p style="color:#ff9999;margin-top:14px">Pokémon introuvable 😕</p>`;
+    customizer.style.display = 'none';
+    checkReady();
+  }
+}
+
+// ================= COMBAT =================
+function typeEffect(moveType, defTypes){
+  let eff = 1;
+  for(const t of defTypes){ eff *= (EFF[moveType]?.[t] ?? 1); }
+  return eff;
+}
+
+function calcDamage(attacker, defender, move){
+  const atk = move.damageClass === 'physical' ? attacker.atk : attacker.spa;
+  const def = move.damageClass === 'physical' ? defender.def : defender.spd;
+  const eff = typeEffect(move.type, defender.types);
+  const stab = attacker.types.includes(move.type) ? 1.5 : 1;
+  const rand = 0.85 + Math.random() * 0.15;
+  const base = ((2 * attacker.level / 5 + 2) * move.power * atk / def) / 50 + 2;
+  return { dmg: Math.max(1, Math.floor(base * eff * stab * rand)), eff };
+}
+
+function hpText(f){ return `${f.hp} / ${f.maxHP}`; }
+
+function refreshBars(){
+  for(const [f, fillId, hpId] of [[you,'youFill','youHP'],[foe,'foeFill','foeHP']]){
+    const pct = Math.max(0, 100 * f.hp / f.maxHP);
+    const fill = document.getElementById(fillId);
+    fill.style.width = pct + '%';
+    fill.className = 'hp-fill' + (pct < 25 ? ' low' : pct < 55 ? ' mid' : '');
+    document.getElementById(hpId).textContent = hpText(f);
+  }
+}
+
+function log(msg, color){
+  const el = document.getElementById('log');
+  const p = document.createElement('div');
+  p.innerHTML = msg; if(color) p.style.color = color;
+  el.appendChild(p);
+  el.scrollTop = el.scrollHeight;
+}
+
+function animHit(side){
+  const sprite = document.getElementById(side === 'you' ? 'youSprite' : 'foeSprite');
+  sprite.classList.remove('shake'); void sprite.offsetWidth; sprite.classList.add('shake');
+}
+
+function setMovesEnabled(on){
+  document.querySelectorAll('.move-btn').forEach(b => b.disabled = !on || gameOver);
+}
+
+function renderMoves(){
+  const box = document.getElementById('moves');
+  box.innerHTML = '';
+  you.moves.forEach((m, i) => {
+    const b = document.createElement('button');
+    b.className = 'move-btn';
+    b.style.background = `linear-gradient(${TYPE_COLORS[m.type]}, ${TYPE_COLORS[m.type]}bb)`;
+    b.innerHTML = `${m.name} <span class="move-info">${m.type} · Puissance ${m.power} · Précision ${m.accuracy}%</span>`;
+    b.onclick = () => playerAttack(i);
+    box.appendChild(b);
+  });
+}
+
+function effMsg(eff){
+  if(eff === 0) return " Ce n'est pas efficace...";
+  if(eff >= 2) return " C'est super efficace !";
+  if(eff < 1) return " Ce n'est pas très efficace...";
+  return "";
+}
+
+function doAttack(attacker, defender, move, attackerLabel, defenderLabel, spriteHitId){
+  if(Math.random() * 100 > move.accuracy){
+    log(`${attackerLabel} utilise <b>${move.name}</b>... mais ça échoue !`, '#ffaaaa');
+    return;
+  }
+  const { dmg, eff } = calcDamage(attacker, defender, move);
+  defender.hp = Math.max(0, defender.hp - dmg);
+  animHit(spriteHitId);
+  log(`${attackerLabel} utilise <b>${move.name}</b> ! ${defenderLabel} perd <b>${dmg}</b> PV.${effMsg(eff)}`, eff>=2?'#7dff7d':eff===0?'#ffaaaa':undefined);
+  refreshBars();
+}
+
+function checkEnd(){
+  if(foe.hp <= 0){
+    gameOver = true;
+    document.getElementById('result').style.display = 'flex';
+    document.getElementById('resultText').innerHTML = `🏆 <span style="color:gold">VICTOIRE !</span><br><span class="msg">${foe.name} est K.O. !</span>`;
+    setMovesEnabled(false);
+    return true;
+  }
+  if(you.hp <= 0){
+    gameOver = true;
+    document.getElementById('result').style.display = 'flex';
+    document.getElementById('resultText').innerHTML = `💀 <span style="color:#ff8080">DÉFAITE...</span><br><span class="msg">${you.name} est K.O. !</span>`;
+    setMovesEnabled(false);
+    return true;
+  }
+  return false;
+}
+
+async function playerAttack(i){
+  if(!yourTurn || gameOver) return;
+  yourTurn = false;
+  setMovesEnabled(false);
+  const move = you.moves[i];
+  doAttack(you, foe, move, `Ton ${you.name}`, `le ${foe.name} adverse`, 'foeSprite');
+  if(checkEnd()) return;
+  setTimeout(() => {
+    // tour de l'adversaire : attaque la plus efficace disponible (simple IA)
+    const best = foe.moves.map(m => ({m, e: typeEffect(m.type, you.types)})).sort((a,b)=>b.e-a.e)[0];
+    doAttack(foe, you, best.m, `Le ${foe.name} adverse`, `ton ${you.name}`, 'youSprite');
+    if(checkEnd()) return;
+    yourTurn = true;
+    setMovesEnabled(true);
+  }, 1100);
+}
+
+function startBattle(){
+  // Applique la personnalisation du joueur si le panneau est ouvert
+  if(customizer.style.display === 'block' && fighter1){
+    refreshPreview1(); // relit stats + niveau dans les champs
+    if(fighter1.learnset) movesFromSelects(fighter1);
+  }
+  if(!fighter1.moves.length) fighter1.moves = [{name:'Charge', type:'normal', power:40, accuracy:100, damageClass:'physical'}];
+  // L'adversaire joue au même niveau
+  if(fighter2){
+    fighter2.level = fighter1.level;
+    applyStats(fighter2);
+  }
+  you = fighter1; foe = fighter2;
+  gameOver = false; yourTurn = true;
+  document.getElementById('select').style.display = 'none';
+  document.getElementById('battle').style.display = 'block';
+  document.getElementById('result').style.display = 'none';
+  document.getElementById('youName').textContent = `${you.name} N.${you.level}`;
+  document.getElementById('foeName').textContent = `${foe.name} N.${foe.level}`;
+  document.getElementById('youSprite').src = you.backSprite || you.sprite;
+  document.getElementById('foeSprite').src = foe.sprite;
+  refreshBars();
+  document.getElementById('log').innerHTML = '';
+  log(`⚡ Le combat commence : <b>${you.name} N.${you.level}</b> vs <b>${foe.name} N.${foe.level}</b> !`);
+  if(you.speed >= foe.speed){
+    log(`Ton ${you.name} est plus rapide, il attaque en premier !`);
+  } else {
+    log(`Le ${foe.name} adverse est plus rapide !`);
+    yourTurn = false;
+    setTimeout(() => {
+      const best = foe.moves[Math.floor(Math.random()*foe.moves.length)];
+      doAttack(foe, you, best, `Le ${foe.name} adverse`, `ton ${you.name}`, 'youSprite');
+      if(!checkEnd()){ yourTurn = true; setMovesEnabled(true); }
+    }, 1000);
+  }
+  renderMoves();
+  setMovesEnabled(yourTurn);
+}
+
+function resetToSelect(){
+  document.getElementById('battle').style.display = 'none';
+  document.getElementById('select').style.display = 'block';
+}
+
+// ============ Events ============
+document.getElementById('pick1').addEventListener('change', e => loadPlayerPokemon(e.target.value));
+document.getElementById('pick2').addEventListener('change', async e => {
+  const val = e.target.value.trim();
+  if(!val) return;
+  try{
+    const data = await fetchPokemon(val);
+    const f = buildFighter(data, 50);
+    f.rawMoves = data.moves.map(m => m.move.url);
+    await autoMoves(f);
+    fighter2 = f;
+    document.getElementById('prev2').innerHTML = previewHTML(f);
+  }catch(err){
+    fighter2 = null;
+    document.getElementById('prev2').innerHTML = `<p style="color:#ff9999;margin-top:14px">Pokémon introuvable 😕</p>`;
+  }
+  checkReady();
+});
+lvlInput.addEventListener('input', () => {
+  document.getElementById('lvlVal').textContent = lvlInput.value;
+  refreshPreview1();
+});
+for(const k of STAT_KEYS){
+  document.getElementById('st-'+k).addEventListener('input', refreshPreview1);
+}
+document.getElementById('resetStats').onclick = () => {
+  if(!fighter1 || !fighter1.rawBase) return;
+  for(const k of STAT_KEYS) document.getElementById('st-'+k).value = fighter1.rawBase[k];
+  lvlInput.value = 50; document.getElementById('lvlVal').textContent = '50';
+  refreshPreview1();
+};
+for(let i = 0; i < 4; i++){
+  document.getElementById('mv'+i).addEventListener('change', () => { if(fighter1) refreshPreview1(); });
+}
+document.getElementById('randMoves').onclick = () => { if(fighter1) randomMovesFromSelects(fighter1); };
+document.getElementById('addMoveBtn').onclick = async () => {
+  const input = document.getElementById('addMove');
+  const val = input.value.trim().toLowerCase().replace(/\s+/g,'-');
+  if(!val || !fighter1) return;
+  try{
+    const mv = await fetchMoveCached(`${API}/move/${val}`);
+    if(!mv.power || mv.damage_class.name === 'status'){
+      alert(`"${val}" n'est pas une attaque offensive (pas de puissance). Essaie thunderbolt, earthquake, flamethrower...`);
+      return;
+    }
+    const obj = moveObj(mv);
+    if(!fighter1.learnset) fighter1.learnset = [];
+    if(!fighter1.learnset.find(m => m.name === obj.name)) fighter1.learnset.push(obj);
+    // remplace le premier slot vide, sinon le slot 1
+    fighter1.moves[fighter1.moves.length < 4 ? fighter1.moves.length : 0] = obj;
+    populateMoveSelects(fighter1);
+    refreshPreview1();
+    input.value = '';
+  }catch(e){
+    alert(`Attaque "${val}" introuvable. Vérifie le nom anglais (ex : thunderbolt, hydro-pump).`);
+  }
+};
+document.getElementById('startBtn').onclick = startBattle;
+document.getElementById('againBtn').onclick = () => {
+  you.hp = you.maxHP; foe.hp = foe.maxHP;
+  startBattle();
+};
+document.getElementById('fleeBtn').onclick = () => {
+  log('Tu prends la fuite ! 🏃', '#ffdd55');
+  setTimeout(resetToSelect, 700);
+};
+document.getElementById('randomBtn').onclick = async () => {
+  const b = document.getElementById('randomBtn');
+  b.disabled = true; b.textContent = '⏳ Chargement...';
+  const pick = () => allNames[Math.floor(Math.random()*151)]; // Gen 1
+  try{
+    const [d1, d2] = await Promise.all([fetchPokemon(pick()), fetchPokemon(pick())]);
+    const f1 = buildFighter(d1, 50); f1.rawMoves = d1.moves.map(m => m.move.url);
+    const f2 = buildFighter(d2, 50); f2.rawMoves = d2.moves.map(m => m.move.url);
+    await Promise.all([autoMoves(f1), autoMoves(f2)]);
+    fighter1 = f1; fighter2 = f2;
+    customizer.style.display = 'none'; // démarrage direct
+    startBattle();
+  }finally{
+    b.disabled = false; b.textContent = '🎲 Combat aléatoire';
+  }
+};
+
+loadNames();
+</script>
+</body>
+</html>
