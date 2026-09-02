@@ -1,23 +1,24 @@
 # ⚔️ PokeFight
 
-Un site web de combats Pokémon au tour par tour, avec les données de la [PokéAPI](https://pokeapi.co).
+Arène de combats Pokémon en tour par tour, directement dans le navigateur.
 
-## Fonctionnalités
+## ✨ Fonctionnalités
 
-- 🎮 Choisis n'importe quel Pokémon (toutes générations)
-- 📊 Personnalisation complète : niveau, PV, Attaque, Défense, Atq Spé., Déf Spé., Vitesse
-- 🎯 Choisis les 4 attaques de ton Pokémon (ou ajoute n'importe quelle attaque par son nom)
-- ⚔️ Vraies mécaniques Pokémon : efficacité des types, STAB, coups critiques, ordre selon la Vitesse
-- 🤖 Adversaire IA qui choisit ses meilleures attaques
-- 🎲 Combat aléatoire en un clic
+- **Tous les Pokémon** — données en temps réel via la [PokéAPI](https://pokeapi.co)
+- **Personnalisation complète** de ton Pokémon : niveau (5–100), 6 stats modifiables (PV, Attaque, Défense, Atq Spé., Déf Spé., Vitesse)
+- **Choix des attaques** : 4 attaques parmi celles que le Pokémon apprend, ou ajoute n'importe quelle attaque par son nom (ex : `thunderbolt`, `earthquake`)
+- **Mécaniques fidèles** : efficacité des types, bonus STAB, coups critiques, formules de dégâts et de stats officielles
+- **IA adverse** qui choisit ses attaques les plus efficaces
+- Ordre d'attaque basé sur la **Vitesse**, journal de combat en français, animations
+- Mode **🎲 Combat aléatoire** pour démarrer vite
 
-## Utilisation
+## 🚀 Utilisation
 
 Ouvre simplement `index.html` dans un navigateur (connexion internet requise pour la PokéAPI).
 
-Ou en local :
+Ou lance un petit serveur local :
 
 ```bash
-python3 -m http.server 8000
-# puis ouvrir http://localhost:8000
+python3 -m http.server 8080
+# puis ouvre http://localhost:8080
 ```
