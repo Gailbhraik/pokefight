@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PokéZoo — Gère ton zoo Pokémon</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#070a14; --card:rgba(255,255,255,.045); --card2:rgba(255,255,255,.07);
+    --stroke:rgba(255,255,255,.09); --stroke2:rgba(255,255,255,.16);
+    --txt:#eef1ff; --muted:rgba(238,241,255,.55);
+    --acc1:#7c5cff; --acc2:#00d4ff; --gold:#ffd166; --green:#4ade80; --red:#f87171;
+    --grad:linear-gradient(135deg,#7c5cff,#00d4ff);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family:'Outfit','Segoe UI',Tahoma,sans-serif;
+    background:var(--bg); color:var(--txt);
+    min-height:100vh; padding:26px 20px 60px; overflow-x:hidden;
+  }
+  body::before {
+    content:''; position:fixed; inset:0; z-index:-2; pointer-events:none;
+    background:
+      radial-gradient(900px 600px at 15% -10%, rgba(74,222,128,.16), transparent 60%),
+      radial-gradient(900px 600px at 90% 0%, rgba(124,92,255,.18), transparent 60%),
+      radial-gradient(1200px 800px at 50% 120%, rgba(0,212,255,.10), transparent 60%);
+  }
+  #bg3d { position:fixed; inset:0; z-index:-1; display:block; }
+  ::selection { background:rgba(124,92,255,.5); }
+  a.toplink {
+    position:fixed; top:18px; right:20px; z-index:50; text-decoration:none;
+    background:var(--card2); color:var(--txt); border:1px solid var(--stroke2);
+    padding:9px 18px; border-radius:14px; font-weight:700; font-size:.9em;
+    transition:transform .15s, background .2s; backdrop-filter:blur(10px);
+  }
+  a.toplink:hover { background:rgba(255,255,255,.14); transform:translateY(-2px); }
+  h1 {
+    text-align:center; font-size:clamp(2em,5vw,3em); font-weight:800; letter-spacing:.5px;
+    background:linear-gradient(90deg,#fff 20%,#a8ffb0 45%,#6ee7ff 80%);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+    filter:drop-shadow(0 4px 24px rgba(74,222,128,.3)); margin-bottom:8px;
+  }
+  .subtitle { text-align:center; color:var(--muted); margin-bottom:22px; font-size:1.02em; }
+
+  .wrap { max-width:1180px; margin:0 auto; }
+
+  /* ---------- HUD ---------- */
+  .hud {
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:18px;
+  }
+  .hud-cell {
+    background:var(--card); border:1px solid var(--stroke); border-radius:18px;
+    padding:14px 18px; text-align:center; backdrop-filter:blur(14px);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.07);
+  }
+  .hud-cell .lab { font-size:.76em; color:var(--muted); letter-spacing:1px; text-transform:uppercase; }
+  .hud-cell .val { font-size:1.5em; font-weight:800; margin-top:2px; }
+  .hud-cell .val.money { color:var(--gold); }
+  .hud-cell .val.people { color:#6ee7ff; }
+  .hud-cell .val.stars { color:#ffd166; letter-spacing:2px; }
+  .hud-cell .sub { font-size:.78em; color:var(--muted); }
+
+  /* ---------- Panneaux ---------- */
+  .panel {
+    background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.03));
+    border:1px solid var(--stroke); border-radius:24px; padding:22px;
+    box-shadow:0 30px 80px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.08);
+    backdrop-filter:blur(18px); margin-bottom:18px;
+  }
+  .panel h2 { font-size:1.15em; font-weight:700; margin-bottom:14px; letter-spacing:.3px; }
+
+  .btn {
+    font-family:inherit; position:relative; cursor:pointer;
+    background:var(--grad); color:#fff; border:none;
+    padding:11px 24px; font-size:.95em; font-weight:700; letter-spacing:.3px; border-radius:14px;
+    box-shadow:0 8px 24px rgba(124,92,255,.4);
+    transition:transform .15s, box-shadow .2s, filter .2s;
+  }
+  .btn:hover:not(:disabled) { transform:translateY(-2px); filter:brightness(1.08); box-shadow:0 12px 32px rgba(124,92,255,.55); }
+  .btn:active:not(:disabled) { transform:translateY(1px) scale(.98); }
+  .btn:disabled { opacity:.35; cursor:not-allowed; transform:none; box-shadow:none; }
+  .btn-gray { background:var(--card2); border:1px solid var(--stroke2); box-shadow:none; }
+  .btn-gray:hover:not(:disabled) { background:rgba(255,255,255,.12); box-shadow:none; }
+  .btn-small { padding:7px 15px; font-size:.84em; border-radius:11px; }
+  .btn-green { background:linear-gradient(135deg,#22c55e,#4ade80); box-shadow:0 8px 24px rgba(34,197,94,.35); }
+  .btn-red { background:linear-gradient(135deg,#ef4444,#f97316); box-shadow:0 8px 24px rgba(239,68,68,.3); }
+
+  .cols { display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap; }
+  .col-main { flex:2.2; min-width:320px; }
+  .col-side { flex:1; min-width:290px; }
+
+  input[type=text], input[type=number], select {
+    padding:11px 16px; border-radius:13px; outline:none; font-family:inherit; font-size:.95em;
+    color:var(--txt); background:rgba(0,0,0,.35); border:1px solid var(--stroke2);
+    transition:border-color .2s, box-shadow .2s;
+  }
+  input[type=text]::placeholder { color:rgba(238,241,255,.35); }
+  input[type=text]:focus, select:focus { outline:none; border-color:var(--acc1); box-shadow:0 0 0 4px rgba(124,92,255,.18); }
+  .hint { font-size:.82em; color:var(--muted); line-height:1.55; }
+  .flexrow { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+
+  /* ---------- Enclos ---------- */
+  .zoo-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px; }
+  .pen {
+    background:rgba(0,0,0,.30); border:1px solid var(--stroke); border-radius:20px;
+    padding:16px; position:relative; transition:border-color .25s, box-shadow .25s;
+    display:flex; flex-direction:column;
+  }
+  .pen:hover { border-color:var(--stroke2); box-shadow:0 10px 40px rgba(0,0,0,.4); }
+  .pen-head { display:flex; align-items:center; gap:10px; margin-bottom:4px; }
+  .pen-emoji { font-size:1.9em; filter:drop-shadow(0 4px 8px rgba(0,0,0,.5)); }
+  .pen-name { font-weight:800; font-size:1.08em; }
+  .pen-types { display:flex; gap:5px; margin:4px 0 2px; flex-wrap:wrap; }
+  .type-badge {
+    padding:2.5px 11px; border-radius:20px; font-size:.72em; font-weight:700;
+    text-shadow:0 1px 2px rgba(0,0,0,.5); box-shadow:inset 0 1px 0 rgba(255,255,255,.25);
+  }
+  .pen-count { margin-left:auto; font-size:.85em; color:var(--muted); white-space:nowrap; }
+  .pen-terrain {
+    height:64px; border-radius:14px; margin:10px 0 12px; position:relative; overflow:hidden;
+    display:flex; align-items:center; justify-content:center; gap:2px;
+    box-shadow:inset 0 2px 12px rgba(0,0,0,.5);
+  }
+  .pen-terrain img { width:52px; height:52px; image-rendering:pixelated; position:relative; filter:drop-shadow(0 6px 8px rgba(0,0,0,.6)); transition:transform .2s; z-index:2; }
+  .pen-terrain img:hover { transform:scale(1.25) translateY(-4px); }
+  .pen-terrain img.sad { animation:wobble 2s infinite; }
+  .pen-terrain img.happy { animation:bounce 2.6s infinite; }
+  @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+  @keyframes wobble { 0%,100%{transform:rotate(-6deg)} 50%{transform:rotate(6deg)} }
+  .slot-empty {
+    width:52px; height:52px; border-radius:50%; border:2px dashed rgba(255,255,255,.18);
+    display:flex; align-items:center; justify-content:center; color:rgba(255,255,255,.25); font-size:1.2em;
+  }
+  .pen-residents { display:flex; flex-direction:column; gap:8px; margin-top:4px; }
+  .resident {
+    display:flex; align-items:center; gap:10px; background:rgba(255,255,255,.045);
+    border:1px solid var(--stroke); border-radius:13px; padding:7px 10px;
+  }
+  .resident img { width:38px; height:38px; image-rendering:pixelated; }
+  .resident .rinfo { flex:1; min-width:0; }
+  .resident .rname { font-weight:700; font-size:.9em; }
+  .resident .htrack { height:6px; border-radius:6px; background:rgba(0,0,0,.5); margin-top:4px; overflow:hidden; }
+  .resident .hfill { height:100%; border-radius:6px; transition:width .5s, background .5s; }
+  .resident .ract { display:flex; gap:6px; }
+  .ico-btn {
+    background:var(--card2); border:1px solid var(--stroke2); border-radius:9px;
+    width:30px; height:30px; cursor:pointer; font-size:.9em; display:flex; align-items:center; justify-content:center;
+    transition:background .2s, transform .15s; padding:0;
+  }
+  .ico-btn:hover { background:rgba(255,255,255,.14); transform:translateY(-1px); }
+  .pen-actions { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+  .empty-zoo { text-align:center; padding:40px 10px; color:var(--muted); }
+
+  /* ---------- Boutique ---------- */
+  .shop-item {
+    background:rgba(0,0,0,.30); border:1px solid var(--stroke); border-radius:18px;
+    padding:14px 16px; margin-bottom:10px; display:flex; align-items:center; gap:14px;
+    transition:border-color .2s, transform .2s;
+  }
+  .shop-item:hover { border-color:var(--stroke2); transform:translateX(3px); }
+  .shop-item.locked { opacity:.45; }
+  .shop-item .si-emoji { font-size:2em; filter:drop-shadow(0 4px 8px rgba(0,0,0,.5)); }
+  .shop-item .si-name { font-weight:700; }
+  .shop-item .si-desc { font-size:.8em; color:var(--muted); line-height:1.4; }
+  .shop-item .si-price { margin-left:auto; text-align:right; white-space:nowrap; }
+  .price { color:var(--gold); font-weight:800; }
+  .owned { color:var(--green); font-weight:700; font-size:.85em; }
+
+  /* ---------- Adoption ---------- */
+  #adoptPreview { margin-top:14px; }
+  .adopt-card {
+    background:rgba(0,0,0,.30); border:1px solid var(--stroke2); border-radius:18px;
+    padding:16px; display:flex; gap:16px; align-items:center; flex-wrap:wrap;
+  }
+  .adopt-card img { width:96px; height:96px; image-rendering:pixelated; filter:drop-shadow(0 8px 16px rgba(0,0,0,.55)); }
+  .adopt-info { flex:1; min-width:170px; }
+  .adopt-info .a-name { font-weight:800; font-size:1.2em; }
+  .adopt-info .a-types { display:flex; gap:5px; margin:6px 0; }
+  .adopt-info .a-stats { font-size:.82em; color:var(--muted); line-height:1.6; }
+  .adopt-info .a-stats b { color:var(--txt); }
+  .legend-tag {
+    display:inline-block; padding:2px 10px; border-radius:12px; font-size:.72em; font-weight:700;
+    background:linear-gradient(135deg,#ffd166,#ff8fa3); color:#2b1a00; margin-left:8px; vertical-align:middle;
+  }
+
+  /* ---------- Journal ---------- */
+  .logbox {
+    background:rgba(0,0,0,.30); border:1px solid var(--stroke); border-radius:16px;
+    padding:12px 14px; max-height:260px; overflow-y:auto; font-size:.86em; line-height:1.75;
+  }
+  .logbox .l-day { color:var(--muted); font-weight:700; }
+  .logbox .l-good { color:var(--green); }
+  .logbox .l-bad { color:var(--red); }
+  .logbox .l-gold { color:var(--gold); }
+
+  /* ---------- Staff ---------- */
+  .staff-card {
+    background:rgba(0,0,0,.30); border:1px solid var(--stroke); border-radius:18px;
+    padding:14px 16px; margin-bottom:10px;
+  }
+  .staff-card .s-top { display:flex; align-items:center; gap:10px; }
+  .staff-card .s-emoji { font-size:1.7em; }
+  .staff-card .s-name { font-weight:700; }
+  .staff-card .s-desc { font-size:.8em; color:var(--muted); margin-top:2px; line-height:1.45; }
+  .staff-card .s-cta { margin-left:auto; text-align:right; }
+  .staff-count { color:var(--green); font-weight:700; }
+
+  /* ---------- Modale adoption réussie / alertes ---------- */
+  .toast-wrap { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:99; display:flex; flex-direction:column; gap:10px; align-items:center; }
+  .toast {
+    background:rgba(20,16,40,.92); border:1px solid var(--stroke2); border-radius:16px;
+    padding:13px 26px; font-weight:600; font-size:.95em; backdrop-filter:blur(14px);
+    box-shadow:0 16px 50px rgba(0,0,0,.6); animation:toastIn .3s ease;
+    max-width:90vw; text-align:center;
+  }
+  @keyframes toastIn { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+
+  /* ---------- Écran de création ---------- */
+  #setup { max-width:560px; margin:40px auto; text-align:center; }
+  #setup .big-emoji { font-size:4.5em; margin-bottom:10px; filter:drop-shadow(0 10px 30px rgba(124,92,255,.4)); }
+  #setup input[type=text] { text-align:center; font-size:1.1em; width:min(340px,90%); }
+  .emoji-picks { display:flex; gap:10px; justify-content:center; margin:18px 0 22px; flex-wrap:wrap; }
+  .emoji-pick {
+    width:56px; height:56px; font-size:1.7em; display:flex; align-items:center; justify-content:center;
+    background:var(--card); border:2px solid var(--stroke); border-radius:16px; cursor:pointer;
+    transition:transform .15s, border-color .2s;
+  }
+  .emoji-pick:hover { transform:translateY(-3px); }
+  .emoji-pick.sel { border-color:var(--acc1); box-shadow:0 0 0 4px rgba(124,92,255,.25); }
+
+  #zooUI { display:none; }
+  .daybar { display:flex; align-items:center; gap:14px; margin-bottom:6px; flex-wrap:wrap; }
+  .daybar .zname { font-size:1.25em; font-weight:800; letter-spacing:.3px; }
+  .daybar .day { color:#6ee7ff; font-weight:700; }
+  .speed-btn.active { outline:2px solid var(--acc1); outline-offset:2px; }
+  @media (max-width:640px){ .hud-cell .val{font-size:1.2em} .pen-terrain{height:58px} }
+</style>
+</head>
+<body>
+<canvas id="bg3d"></canvas>
+<a class="toplink" href="index.html">⚔️ Retour à l'arène</a>
+
+<!-- ============ CRÉATION DU ZOO ============ -->
+<div id="setup" class="wrap">
+  <h1><span class="big-emoji">🏞️</span><br><span style="font-size:.62em">Crée ton</span> PokéZoo</h1>
+  <p class="subtitle">Choisis un nom et une emblème, puis construis le zoo Pokémon de tes rêves.</p>
+  <div class="panel" style="max-width:560px;margin:0 auto">
+    <div style="margin-bottom:14px">
+      <input type="text" id="zooNameInput" maxlength="24" placeholder="Nom du zoo (ex : Le Sanctuaire Vert)">
+    </div>
+    <p class="hint" style="margin-bottom:6px">Emoji d'emblème :</p>
+    <div class="emoji-picks" id="emojiPicks"></div>
+    <button class="btn" id="createZooBtn" disabled>🌳 Fondrer le zoo</button>
+    <p class="hint" style="margin-top:14px">Tu démarres avec <b style="color:var(--gold)">5 000 ₽</b> et un enclos « Campagne » offert. Adopte des Pokémon, rends-les heureux, attire les visiteurs !</p>
+  </div>
+</div>
+
+<!-- ============ ZOO ============ -->
+<div id="zooUI" class="wrap">
+  <h1>🏞️ <span id="titleName">PokéZoo</span></h1>
+  <p class="subtitle" id="zooMotto">Ton zoo Pokémon — adopte, nourris, prospère.</p>
+
+  <div class="hud">
+    <div class="hud-cell"><div class="val money" id="hudMoney">0 ₽</div><div class="sub" id="hudNet">—</div></div>
+    <div class="hud-cell"><div class="val people" id="hudVisitors">0</div><div class="lab">visiteurs aujourd'hui</div></div>
+    <div class="hud-cell"><div class="val" id="hudPens">0</div><div class="lab">enclos · <span id="hudCap">0/0</span> places</div></div>
+    <div class="hud-cell"><div class="val" id="hudSpecies">0</div><div class="lab">espèces différentes</div></div>
+    <div class="hud-cell"><div class="val starsed" id="hudStars">☆☆☆☆☆</div><div class="lab">réputation</div></div>
+    <div class="hud-cell"><div class="val" id="hudDay">Jour 1</div><div class="sub" id="hudSeason">🌸 Printemps</div></div>
+  </div>
+
+  <div class="daybar">
+    <span class="zname">🗓️ <span class="day" id="dayLabel">Jour 1</span></span>
+    <button class="btn btn-gray btn-small" id="pauseBtn">⏸ Pause</button>
+    <button class="btn btn-gray btn-small speed-btn" id="speed1" data-s="9000">▶ ×1</button>
+    <button class="btn btn-gray btn-small speed-btn active" id="speed2" data-s="4500">⏩ ×2</button>
+    <button class="btn btn-gray btn-small speed-btn" id="speed4" data-s="2200">⚡ ×4</button>
+    <span style="flex:1"></span>
+    <button class="btn btn-gray btn-small btn-red" id="resetBtn" style="border:none">🗑 Repartir de zéro</button>
+  </div>
+
+  <div class="cols">
+    <!-- ===== COLONNE PRINCIPALE : LE ZOO ===== -->
+    <div class="col-main col-main-pad">
+      <div class="panel">
+        <h2>🗺️ Ton zoo <span class="hint" id="attractInfo"></span></h2>
+        <div class="zoo-grid" id="penGrid"></div>
+      </div>
+
+      <!-- Adoption -->
+      <div class="panel">
+        <h2>🥚 Adoption — accueille un nouveau Pokémon</h2>
+        <div class="flexrow">
+          <input type="text" id="adoptInput" placeholder="Nom du Pokémon (ex : Pikachu, Évoli, Ronflex...)" style="flex:1;min-width:220px" list="zooNames">
+          <button class="btn" id="adoptSearchBtn">🔍 Chercher</button>
+        </div>
+        <datalist id="zooNames"></datalist>
+        <p class="hint" style="margin-top:8px">💡 Le prix dépend de la puissance du Pokémon. Les Pokémon légendaires coûtent une fortune mais attirent énormément de visiteurs. Le type du Pokémon doit correspondre à un enclos compatible.</p>
+        <div id="adoptPreview"></div>
+      </div>
+    </div>
+
+    <!-- ===== COLONNE LATÉRALE ===== -->
+    <div class="col-side">
+      <!-- Boutique enclos -->
+      <div class="panel">
+        <h2>🏗️ Boutique d'enclos</h2>
+        <div id="penShop"></div>
+      </div>
+
+      <!-- Personnel -->
+      <div class="panel">
+        <h2>👷 Personnel</h2>
+        <div id="staffBox"></div>
+      </div>
+
+      <!-- Billetterie -->
+      <div class="panel">
+        <h2>🎫 Billetterie</h2>
+        <div class="flexrow" style="justify-content:space-between">
+          <span>Prix du billet</span>
+          <b class="price" id="ticketPrice">12 ₽</b>
+        </div>
+        <div class="flexrow" style="margin-top:10px">
+          <button class="btn btn-gray btn-small" id="ticketDown">− 2 ₽</button>
+          <button class="btn btn-gray btn-small" id="ticketUp">+ 2 ₽</button>
+        </div>
+        <p class="hint" style="margin-top:8px">Prix bas → plus de visiteurs, prix haut → plus de recettes par tête (mais ils viennent moins nombreux).</p>
+      </div>
+
+      <!-- Journal -->
+      <div class="panel">
+        <h2>📜 Journal du zoo</h2>
+        <div class="logbox" id="zooLog"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+
+<script>
+const FR_NAMES = {"bulbasaur":"Bulbizarre","ivysaur":"Herbizarre","venusaur":"Florizarre","charmander":"Salamèche","charmeleon":"Reptincel","charizard":"Dracaufeu","squirtle":"Carapuce","wartortle":"Carabaffe","blastoise":"Tortank","caterpie":"Chenipan","metapod":"Chrysacier","butterfree":"Papilusion","weedle":"Aspicot","kakuna":"Coconfort","beedrill":"Dardargnan","pidgey":"Roucool","pidgeotto":"Roucoups","pidgeot":"Roucarnage","rattata":"Rattata","raticate":"Rattatac","spearow":"Piafabec","fearow":"Rapasdepic","ekans":"Abo","arbok":"Arbok","pikachu":"Pikachu","raichu":"Raichu","sandshrew":"Sabelette","sandslash":"Sablaireau","nidoran-f":"Nidoran♀","nidorina":"Nidorina","nidoqueen":"Nidoqueen","nidoran-m":"Nidoran♂","nidorino":"Nidorino","nidoking":"Nidoking","clefairy":"Mélofée","clefable":"Mélodelfe","vulpix":"Goupix","ninetales":"Feunard","jigglypuff":"Rondoudou","wigglytuff":"Grodoudou","zubat":"Nosferapti","golbat":"Nosferalto","oddish":"Mystherbe","gloom":"Ortide","vileplume":"Rafflesia","paras":"Paras","parasect":"Parasect","venonat":"Mimitoss","venomoth":"Aéromite","diglett":"Taupiqueur","dugtrio":"Triopikeur","meowth":"Miaouss","persian":"Persian","psyduck":"Psykokwak","golduck":"Akwakwak","mankey":"Férosinge","primeape":"Colossinge","growlithe":"Caninos","arcanine":"Arcanin","poliwag":"Ptitard","poliwhirl":"Têtarte","poliwrath":"Tartard","abra":"Abra","kadabra":"Kadabra","alakazam":"Alakazam","machop":"Machoc","machoke":"Machopeur","machamp":"Mackogneur","bellsprout":"Chétiflor","weepinbell":"Boustiflor","victreebel":"Empiflor","tentacool":"Tentacool","tentacruel":"Tentacruel","geodude":"Racaillou","graveler":"Gravalanch","golem":"Grolem","ponyta":"Ponyta","rapidash":"Galopa","slowpoke":"Ramoloss","slowbro":"Flagadoss","magnemite":"Magnéti","magneton":"Magnéton","farfetchd":"Canarticho","doduo":"Doduo","dodrio":"Dodrio","seel":"Otaria","dewgong":"Lamantine","grimer":"Tadmorv","muk":"Grotadmorv","shellder":"Kokiyas","cloyster":"Crustabri","gastly":"Fantominus","haunter":"Spectrum","gengar":"Ectoplasma","onix":"Onix","drowzee":"Soporifik","hypno":"Hypnomade","krabby":"Krabby","kingler":"Krabboss","voltorb":"Voltorbe","electrode":"Électrode","exeggcute":"Noeunoeuf","exeggutor":"Noadkoko","cubone":"Osselait","marowak":"Ossatueur","hitmonlee":"Kicklee","hitmonchan":"Tygnon","lickitung":"Excelangue","koffing":"Smogo","weezing":"Smogogo","rhyhorn":"Rhinocorne","rhydon":"Rhinoféros","chansey":"Leveinard","tangela":"Saquedeneu","kangaskhan":"Kangourex","horsea":"Hypotrempe","seadra":"Hypocéan","goldeen":"Poissirène","seaking":"Poissoroy","staryu":"Stari","starmie":"Staross","mr-mime":"M. Mime","scyther":"Insécateur","jynx":"Lippoutou","electabuzz":"Élektek","magmar":"Magmar","pinsir":"Scarabrute","tauros":"Tauros","magikarp":"Magicarpe","gyarados":"Léviator","lapras":"Lokhlass","ditto":"Métamorph","eevee":"Évoli","vaporeon":"Aquali","jolteon":"Voltali","flareon":"Pyroli","porygon":"Porygon","omanyte":"Amonita","omastar":"Amonistar","kabuto":"Kabuto","kabutops":"Kabutops","aerodactyl":"Ptéra","snorlax":"Ronflex","articuno":"Artikodin","zapdos":"Électhor","moltres":"Sulfura","dratini":"Minidraco","dragonair":"Draco","dragonite":"Dracolosse","mewtwo":"Mewtwo","mew":"Mew","chikorita":"Germignon","bayleef":"Macronium","meganium":"Méganium","cyndaquil":"Héricendre","quilava":"Feurisson","typhlosion":"Typhlosion","totodile":"Kaiminus","croconaw":"Crocrodil","feraligatr":"Aligatueur","sentret":"Fouinette","furret":"Fouinar","hoothoot":"Hoothoot","noctowl":"Noarfang","ledyba":"Coxy","ledian":"Coxyclaque","spinarak":"Mimigal","ariados":"Migalos","crobat":"Nostenfer","chinchou":"Loupio","lanturn":"Lanturn","pichu":"Pichu","cleffa":"Mélo","igglybuff":"Toudoudou","togepi":"Togepi","togetic":"Togetic","natu":"Natu","xatu":"Xatu","mareep":"Wattouat","flaaffy":"Lainergie","ampharos":"Pharamp","bellossom":"Joliflor","marill":"Marill","azumarill":"Azumarill","sudowoodo":"Simularbre","politoed":"Tarpaud","hoppip":"Granivol","skiploom":"Floravol","jumpluff":"Cotovol","aipom":"Capumain","sunkern":"Tournegrin","sunflora":"Héliatronc","yanma":"Yanma","wooper":"Axoloto","quagsire":"Maraiste","espeon":"Mentali","umbreon":"Noctali","murkrow":"Cornèbre","slowking":"Roigada","misdreavus":"Feuforêve","unown":"Zarbi","wobbuffet":"Qulbutoké","girafarig":"Girafarig","pineco":"Pomdepik","forretress":"Foretress","dunsparce":"Insolourdo","gligar":"Scorplane","steelix":"Steelix","snubbull":"Snubbull","granbull":"Granbull","qwilfish":"Qwilfish","scizor":"Cizayox","shuckle":"Caratroc","heracross":"Scarhino","sneasel":"Farfuret","teddiursa":"Teddiursa","ursaring":"Ursaring","slugma":"Limagma","magcargo":"Volcaropod","swinub":"Marcacrin","piloswine":"Cochignon","corsola":"Corayon","remoraid":"Rémoraid","octillery":"Octillery","delibird":"Cadoizo","mantine":"Démanta","skarmory":"Airmure","houndour":"Malosse","houndoom":"Démolosse","kingdra":"Hyporoi","phanpy":"Phanpy","donphan":"Donphan","porygon2":"Porygon2","stantler":"Cerfrousse","smeargle":"Queulorior","tyrogue":"Debugant","hitmontop":"Kapoera","smoochum":"Lippouti","elekid":"Élekid","magby":"Magby","miltank":"Écrémeuh","blissey":"Leuphorie","raikou":"Raikou","entei":"Entei","suicune":"Suicune","larvitar":"Embrylex","pupitar":"Ymphect","tyranitar":"Tyranocif","lugia":"Lugia","ho-oh":"Ho-Oh","celebi":"Celebi","treecko":"Arcko","grovyle":"Massko","sceptile":"Jungko","torchic":"Poussifeu","combusken":"Galifeu","blaziken":"Braségali","mudkip":"Gobou","marshtomp":"Flobio","swampert":"Laggron","poochyena":"Medhyèna","mightyena":"Grahyèna","zigzagoon":"Zigzaton","linoone":"Linéon","wurmple":"Chenipotte","silcoon":"Armulys","beautifly":"Charmillon","cascoon":"Blindalys","dustox":"Papinox","lotad":"Nénupiot","lombre":"Lombre","ludicolo":"Ludicolo","seedot":"Grainipiot","nuzleaf":"Pifeuil","shiftry":"Tengalice","taillow":"Nirondelle","swellow":"Hélédelle","wingull":"Goélise","pelipper":"Bekipan","ralts":"Tarsal","kirlia":"Kirlia","gardevoir":"Gardevoir","surskit":"Arakdo","masquerain":"Maskadra","shroomish":"Balignon","breloom":"Chapignon","slakoth":"Parecool","vigoroth":"Vigoroth","slaking":"Monaflèmit","nincada":"Ningale","ninjask":"Ninjask","shedinja":"Munja","whismur":"Chuchmur","loudred":"Ramboum","exploud":"Brouhabam","makuhita":"Makuhita","hariyama":"Hariyama","azurill":"Azurill","nosepass":"Tarinor","skitty":"Skitty","delcatty":"Delcatty","sableye":"Ténéfix","mawile":"Mysdibule","aron":"Galekid","lairon":"Galegon","aggron":"Galeking","meditite":"Méditikka","medicham":"Charmina","electrike":"Dynavolt","manectric":"Élecsprint","plusle":"Posipi","minun":"Négapi","volbeat":"Muciole","illumise":"Lumivole","roselia":"Rosélia","gulpin":"Gloupti","swalot":"Avaltout","carvanha":"Carvanha","sharpedo":"Sharpedo","wailmer":"Wailmer","wailord":"Wailord","numel":"Chamallot","camerupt":"Camérupt","torkoal":"Chartor","spoink":"Spoink","grumpig":"Groret","spinda":"Spinda","trapinch":"Kraknoix","vibrava":"Vibraninf","flygon":"Libégon","cacnea":"Cacnea","cacturne":"Cacturne","swablu":"Tylton","altaria":"Altaria","zangoose":"Mangriff","seviper":"Séviper","lunatone":"Séléroc","solrock":"Solaroc","barboach":"Barloche","whiscash":"Barbicha","corphish":"Écrapince","crawdaunt":"Colhomard","baltoy":"Balbuto","claydol":"Kaorine","lileep":"Lilia","cradily":"Vacilys","anorith":"Anorith","armaldo":"Armaldo","feebas":"Barpau","milotic":"Milobellus","castform":"Morphéo","kecleon":"Kecleon","shuppet":"Polichombr","banette":"Branette","duskull":"Skelénox","dusclops":"Téraclope","tropius":"Tropius","chimecho":"Éoko","absol":"Absol","wynaut":"Okéoké","snorunt":"Stalgamin","glalie":"Oniglali","spheal":"Obalie","sealeo":"Phogleur","walrein":"Kaimorse","clamperl":"Coquiperl","huntail":"Serpang","gorebyss":"Rosabyss","relicanth":"Relicanth","luvdisc":"Lovdisc","bagon":"Draby","shelgon":"Drackhaus","salamence":"Drattak","beldum":"Terhal","metang":"Métang","metagross":"Métalosse","regirock":"Regirock","regice":"Regice","registeel":"Registeel","latias":"Latias","latios":"Latios","kyogre":"Kyogre","groudon":"Groudon","rayquaza":"Rayquaza","jirachi":"Jirachi","deoxys":"Deoxys","turtwig":"Tortipouss","grotle":"Boskara","torterra":"Torterra","chimchar":"Ouisticram","monferno":"Chimpenfeu","infernape":"Simiabraz","piplup":"Tiplouf","prinplup":"Prinplouf","empoleon":"Pingoléon","starly":"Étourmi","staravia":"Étourvol","staraptor":"Étouraptor","bidoof":"Keunotor","bibarel":"Castorno","kricketot":"Crikzik","kricketune":"Mélokrik","shinx":"Lixy","luxio":"Luxio","luxray":"Luxray","budew":"Rozbouton","roserade":"Roserade","cranidos":"Kranidos","rampardos":"Charkos","shieldon":"Dinoclier","bastiodon":"Bastiodon","burmy":"Cheniti","wormadam":"Cheniselle","mothim":"Papilord","combee":"Apitrini","vespiquen":"Apireine","pachirisu":"Pachirisu","buizel":"Mustébouée","floatzel":"Mustéflott","cherubi":"Ceribou","cherrim":"Ceriflor","shellos":"Sancoki","gastrodon":"Tritosor","ambipom":"Capidextre","drifloon":"Baudrive","drifblim":"Grodrive","buneary":"Laporeille","lopunny":"Lockpin","mismagius":"Magirêve","honchkrow":"Corboss","glameow":"Chaglam","purugly":"Chaffreux","chingling":"Korillon","stunky":"Moufouette","skuntank":"Moufflair","bronzor":"Archéomire","bronzong":"Archéodong","bonsly":"Manzaï","mime-jr":"Mime Jr.","happiny":"Ptiravi","chatot":"Pijako","spiritomb":"Spiritomb","gible":"Griknot","gabite":"Carmache","garchomp":"Carchacrok","munchlax":"Goinfrex","riolu":"Riolu","lucario":"Lucario","hippopotas":"Hippopotas","hippowdon":"Hippodocus","skorupi":"Rapion","drapion":"Drascore","croagunk":"Cradopaud","toxicroak":"Coatox","carnivine":"Vortente","finneon":"Écayon","lumineon":"Luminéon","mantyke":"Babimanta","snover":"Blizzi","abomasnow":"Blizzaroi","weavile":"Dimoret","magnezone":"Magnézone","lickilicky":"Coudlangue","rhyperior":"Rhinastoc","tangrowth":"Bouldeneu","electivire":"Élekable","magmortar":"Maganon","togekiss":"Togekiss","yanmega":"Yanmega","leafeon":"Phyllali","glaceon":"Givrali","gliscor":"Scorvol","mamoswine":"Mammochon","porygon-z":"Porygon-Z","gallade":"Gallame","probopass":"Tarinorme","dusknoir":"Noctunoir","froslass":"Momartik","rotom":"Motisma","uxie":"Créhelf","mesprit":"Créfollet","azelf":"Créfadet","dialga":"Dialga","palkia":"Palkia","heatran":"Heatran","regigigas":"Regigigas","giratina":"Giratina","cresselia":"Cresselia","phione":"Phione","manaphy":"Manaphy","darkrai":"Darkrai","shaymin":"Shaymin","arceus":"Arceus","victini":"Victini","snivy":"Vipélierre","servine":"Lianaja","serperior":"Majaspic","tepig":"Gruikui","pignite":"Grotichon","emboar":"Roitiflam","oshawott":"Moustillon","dewott":"Mateloutre","samurott":"Clamiral","patrat":"Ratentif","watchog":"Miradar","lillipup":"Ponchiot","herdier":"Ponchien","stoutland":"Mastouffe","purrloin":"Chacripan","liepard":"Léopardus","pansage":"Feuillajou","simisage":"Feuiloutan","pansear":"Flamajou","simisear":"Flamoutan","panpour":"Flotajou","simipour":"Flotoutan","munna":"Munna","musharna":"Mushana","pidove":"Poichigeon","tranquill":"Colombeau","unfezant":"Déflaisan","blitzle":"Zébibron","zebstrika":"Zéblitz","roggenrola":"Nodulithe","boldore":"Géolithe","gigalith":"Gigalithe","woobat":"Chovsourir","swoobat":"Rhinolove","drilbur":"Rototaupe","excadrill":"Minotaupe","audino":"Nanméouïe","timburr":"Charpenti","gurdurr":"Ouvrifier","conkeldurr":"Bétochef","tympole":"Tritonde","palpitoad":"Batracné","seismitoad":"Crapustule","throh":"Judokrak","sawk":"Karaclée","sewaddle":"Larveyette","swadloon":"Couverdure","leavanny":"Manternel","venipede":"Venipatte","whirlipede":"Scobolide","scolipede":"Brutapode","cottonee":"Doudouvet","whimsicott":"Farfaduvet","petilil":"Chlorobule","lilligant":"Fragilady","basculin":"Bargantua","sandile":"Mascaïman","krokorok":"Escroco","krookodile":"Crocorible","darumaka":"Darumarond","darmanitan":"Darumacho","maractus":"Maracachi","dwebble":"Crabicoque","crustle":"Crabaraque","scraggy":"Baggiguane","scrafty":"Baggaïd","sigilyph":"Cryptéro","yamask":"Tutafeh","cofagrigus":"Tutankafer","tirtouga":"Carapagos","carracosta":"Mégapagos","archen":"Arkéapti","archeops":"Aéroptéryx","trubbish":"Miamiasme","garbodor":"Miasmax","zorua":"Zorua","zoroark":"Zoroark","minccino":"Chinchidou","cinccino":"Pashmilla","gothita":"Scrutella","gothorita":"Mesmérella","gothitelle":"Sidérella","solosis":"Nucléos","duosion":"Méios","reuniclus":"Symbios","ducklett":"Couaneton","swanna":"Lakmécygne","vanillite":"Sorbébé","vanillish":"Sorboul","vanilluxe":"Sorbouboul","deerling":"Vivaldaim","sawsbuck":"Haydaim","emolga":"Emolga","karrablast":"Carabing","escavalier":"Lançargot","foongus":"Trompignon","amoonguss":"Gaulet","frillish":"Viskuse","jellicent":"Moyade","alomomola":"Mamanbo","joltik":"Statitik","galvantula":"Mygavolt","ferroseed":"Grindur","ferrothorn":"Noacier","klink":"Tic","klang":"Clic","klinklang":"Cliticlic","tynamo":"Anchwatt","eelektrik":"Lampéroie","eelektross":"Ohmassacre","elgyem":"Lewsor","beheeyem":"Neitram","litwick":"Funécire","lampent":"Mélancolux","chandelure":"Lugulabre","axew":"Coupenotte","fraxure":"Incisache","haxorus":"Tranchodon","cubchoo":"Polarhume","beartic":"Polagriffe","cryogonal":"Hexagel","shelmet":"Escargaume","accelgor":"Limaspeed","stunfisk":"Limonde","mienfoo":"Kungfouine","mienshao":"Shaofouine","druddigon":"Drakkarmin","golett":"Gringolem","golurk":"Golemastoc","pawniard":"Scalpion","bisharp":"Scalproie","bouffalant":"Frison","rufflet":"Furaiglon","braviary":"Gueriaigle","vullaby":"Vostourno","mandibuzz":"Vaututrice","heatmor":"Aflamanoir","durant":"Fermite","deino":"Solochi","zweilous":"Diamat","hydreigon":"Trioxhydre","larvesta":"Pyronille","volcarona":"Pyrax","cobalion":"Cobaltium","terrakion":"Terrakium","virizion":"Viridium","tornadus":"Boréas","thundurus":"Fulguris","reshiram":"Reshiram","zekrom":"Zekrom","landorus":"Démétéros","kyurem":"Kyurem","keldeo":"Keldeo","meloetta":"Meloetta","genesect":"Genesect","chespin":"Marisson","quilladin":"Boguérisse","chesnaught":"Blindépique","fennekin":"Feunnec","braixen":"Roussil","delphox":"Goupelin","froakie":"Grenousse","frogadier":"Croâporal","greninja":"Amphinobi","bunnelby":"Sapereau","diggersby":"Excavarenne","fletchling":"Passerouge","fletchinder":"Braisillon","talonflame":"Flambusard","scatterbug":"Lépidonille","spewpa":"Pérégrain","vivillon":"Prismillon","litleo":"Hélionceau","pyroar":"Némélios","flabebe":"Flabébé","floette":"Floette","florges":"Florges","skiddo":"Cabriolaine","gogoat":"Chevroum","pancham":"Pandespiègle","pangoro":"Pandarbare","furfrou":"Couafarel","espurr":"Psystigri","meowstic":"Mistigrix","honedge":"Monorpale","doublade":"Dimoclès","aegislash":"Exagide","spritzee":"Fluvetin","aromatisse":"Cocotine","swirlix":"Sucroquin","slurpuff":"Cupcanaille","inkay":"Sepiatop","malamar":"Sepiatroce","binacle":"Opermine","barbaracle":"Golgopathe","skrelp":"Venalgue","dragalge":"Kravarech","clauncher":"Flingouste","clawitzer":"Gamblast","helioptile":"Galvaran","heliolisk":"Iguolta","tyrunt":"Ptyranidur","tyrantrum":"Rexillius","amaura":"Amagara","aurorus":"Dragmara","sylveon":"Nymphali","hawlucha":"Brutalibré","dedenne":"Dedenne","carbink":"Strassie","goomy":"Mucuscule","sliggoo":"Colimucus","goodra":"Muplodocus","klefki":"Trousselin","phantump":"Brocélôme","trevenant":"Desséliande","pumpkaboo":"Pitrouille","gourgeist":"Banshitrouye","bergmite":"Grelaçon","avalugg":"Séracrawl","noibat":"Sonistrelle","noivern":"Bruyverne","xerneas":"Xerneas","yveltal":"Yveltal","zygarde":"Zygarde","diancie":"Diancie","hoopa":"Hoopa","volcanion":"Volcanion","rowlet":"Brindibou","dartrix":"Efflèche","decidueye":"Archéduc","litten":"Flamiaou","torracat":"Matoufeu","incineroar":"Félinferno","popplio":"Otaquin","brionne":"Otarlette","primarina":"Oratoria","pikipek":"Picassaut","trumbeak":"Piclairon","toucannon":"Bazoucan","yungoos":"Manglouton","gumshoos":"Argouste","grubbin":"Larvibule","charjabug":"Chrysapile","vikavolt":"Lucanon","crabrawler":"Crabagarre","crabominable":"Crabominable","oricorio":"Plumeline","cutiefly":"Bombydou","ribombee":"Rubombelle","rockruff":"Rocabot","lycanroc":"Lougaroc","wishiwashi":"Froussardine","mareanie":"Vorastérie","toxapex":"Prédastérie","mudbray":"Tiboudet","mudsdale":"Bourrinos","dewpider":"Araqua","araquanid":"Tarenbulle","fomantis":"Mimantis","lurantis":"Floramantis","morelull":"Spododo","shiinotic":"Lampignon","salandit":"Tritox","salazzle":"Malamandre","stufful":"Nounourson","bewear":"Chelours","bounsweet":"Croquine","steenee":"Candine","tsareena":"Sucreine","comfey":"Guérilande","oranguru":"Gouroutan","passimian":"Quartermac","wimpod":"Sovkipou","golisopod":"Sarmuraï","sandygast":"Bacabouh","palossand":"Trépassable","pyukumuku":"Concombaffe","type-null":"Type:0","silvally":"Silvallié","minior":"Météno","komala":"Dodoala","turtonator":"Boumata","togedemaru":"Togedemaru","mimikyu":"Mimiqui","bruxish":"Denticrisse","drampa":"Draïeul","dhelmise":"Sinistrail","jangmo-o":"Bébécaille","hakamo-o":"Écaïd","kommo-o":"Ékaïser","tapu-koko":"Tokorico","tapu-lele":"Tokopiyon","tapu-bulu":"Tokotoro","tapu-fini":"Tokopisco","cosmog":"Cosmog","cosmoem":"Cosmovum","solgaleo":"Solgaleo","lunala":"Lunala","nihilego":"Zéroïd","buzzwole":"Mouscoto","pheromosa":"Cancrelove","xurkitree":"Câblifère","celesteela":"Bamboiselle","kartana":"Katagami","guzzlord":"Engloutyran","necrozma":"Necrozma","magearna":"Magearna","marshadow":"Marshadow","poipole":"Vémini","naganadel":"Mandrillon","stakataka":"Ama-Ama","blacephalon":"Pierroteknik","zeraora":"Zeraora","meltan":"Meltan","melmetal":"Melmetal","grookey":"Ouistempo","thwackey":"Badabouin","rillaboom":"Gorythmic","scorbunny":"Flambino","raboot":"Lapyro","cinderace":"Pyrobut","sobble":"Larméléon","drizzile":"Arrozard","inteleon":"Lézargus","skwovet":"Rongourmand","greedent":"Rongrigou","rookidee":"Minisange","corvisquire":"Bleuseille","corviknight":"Corvaillus","blipbug":"Larvadar","dottler":"Coléodôme","orbeetle":"Astronelle","nickit":"Goupilou","thievul":"Roublenard","gossifleur":"Tournicoton","eldegoss":"Blancoton","wooloo":"Moumouton","dubwool":"Moumouflon","chewtle":"Khélocrok","drednaw":"Torgamord","yamper":"Voltoutou","boltund":"Fulgudog","rolycoly":"Charbi","carkol":"Wagomine","coalossal":"Monthracite","applin":"Verpom","flapple":"Pomdrapi","appletun":"Dratatin","silicobra":"Dunaja","sandaconda":"Dunaconda","cramorant":"Nigosier","arrokuda":"Embrochet","barraskewda":"Hastacuda","toxel":"Toxizap","toxtricity":"Salarsen","sizzlipede":"Grillepattes","centiskorch":"Scolocendre","clobbopus":"Poulpaf","grapploct":"Krakos","sinistea":"Théffroi","polteageist":"Polthégeist","hatenna":"Bibichut","hattrem":"Chapotus","hatterene":"Sorcilence","impidimp":"Grimalin","morgrem":"Fourbelin","grimmsnarl":"Angoliath","obstagoon":"Ixon","perrserker":"Berserkatt","cursola":"Corayôme","sirfetchd":"Palarticho","mr-rime":"M. Glaquette","runerigus":"Tutétékri","milcery":"Crèmy","alcremie":"Charmilly","falinks":"Hexadron","pincurchin":"Wattapik","snom":"Frissonille","frosmoth":"Beldeneige","stonjourner":"Dolman","eiscue":"Bekaglaçon","indeedee":"Wimessir","morpeko":"Morpeko","cufant":"Charibari","copperajah":"Pachyradjah","dracozolt":"Galvagon","arctozolt":"Galvagla","dracovish":"Hydragon","arctovish":"Hydragla","duraludon":"Duralugon","dreepy":"Fantyrm","drakloak":"Dispareptil","dragapult":"Lanssorien","zacian":"Zacian","zamazenta":"Zamazenta","eternatus":"Éthernatos","kubfu":"Wushours","urshifu":"Shifours","zarude":"Zarude","regieleki":"Regieleki","regidrago":"Regidrago","glastrier":"Blizzeval","spectrier":"Spectreval","calyrex":"Sylveroy","wyrdeer":"Cerbyllin","kleavor":"Hachécateur","ursaluna":"Ursaking","basculegion":"Paragruel","sneasler":"Farfurex","overqwil":"Qwilpik","enamorus":"Amovénus","sprigatito":"Poussacha","floragato":"Matourgeon","meowscarada":"Miascarade","fuecoco":"Chochodile","crocalor":"Crocogril","skeledirge":"Flâmigator","quaxly":"Coiffeton","quaxwell":"Canarbello","quaquaval":"Palmaval","lechonk":"Gourmelet","oinkologne":"Fragroin","tarountula":"Tissenboule","spidops":"Filentrappe","nymble":"Lilliterelle","lokix":"Gambex","pawmi":"Pohm","pawmo":"Pohmotte","pawmot":"Pohmarmotte","tandemaus":"Compagnol","maushold":"Famignol","fidough":"Pâtachiot","dachsbun":"Briochien","smoliv":"Olivini","dolliv":"Olivado","arboliva":"Arboliva","squawkabilly":"Tapatoès","nacli":"Selutin","naclstack":"Amassel","garganacl":"Gigansel","charcadet":"Charbambin","armarouge":"Carmadura","ceruledge":"Malvalame","tadbulb":"Têtampoule","bellibolt":"Ampibidou","wattrel":"Zapétrel","kilowattrel":"Fulgulairo","maschiff":"Grondogue","mabosstiff":"Dogrino","shroodle":"Gribouraigne","grafaiai":"Tag-Tag","bramblin":"Virovent","brambleghast":"Virevorreur","toedscool":"Terracool","toedscruel":"Terracruel","klawf":"Craparoi","capsakid":"Pimito","scovillain":"Scovilain","rellor":"Léboulérou","rabsca":"Bérasca","flittle":"Flotillon","espathra":"Cléopsytra","tinkatink":"Forgerette","tinkatuff":"Forgella","tinkaton":"Forgelina","wiglett":"Taupikeau","wugtrio":"Triopikeau","bombirdier":"Lestombaile","finizen":"Dofin","palafin":"Superdofin","varoom":"Vrombi","revavroom":"Vrombotor","cyclizar":"Motorizard","orthworm":"Ferdeter","glimmet":"Germéclat","glimmora":"Floréclat","greavard":"Toutombe","houndstone":"Tomberro","flamigo":"Flamenroule","cetoddle":"Piétacé","cetitan":"Balbalèze","veluza":"Délestin","dondozo":"Oyacata","tatsugiri":"Nigirigon","annihilape":"Courrousinge","clodsire":"Terraiste","farigiraf":"Farigiraf","dudunsparce":"Deusolourdo","kingambit":"Scalpereur","great-tusk":"Fort-Ivoire","scream-tail":"Hurle-Queue","brute-bonnet":"Fongus-Furie","flutter-mane":"Flotte-Mèche","slither-wing":"Rampe-Ailes","sandy-shocks":"Pelage-Sablé","iron-treads":"Roue-de-Fer","iron-bundle":"Hotte-de-Fer","iron-hands":"Paume-de-Fer","iron-jugulis":"Têtes-de-Fer","iron-moth":"Mite-de-Fer","iron-thorns":"Épine-de-Fer","frigibax":"Frigodo","arctibax":"Cryodo","baxcalibur":"Glaivodo","gimmighoul":"Mordudor","gholdengo":"Gromago","wo-chien":"Chongjian","chien-pao":"Baojian","ting-lu":"Dinglu","chi-yu":"Yuyu","roaring-moon":"Rugit-Lune","iron-valiant":"Garde-de-Fer","koraidon":"Koraidon","miraidon":"Miraidon","walking-wake":"Serpente-Eau","iron-leaves":"Vert-de-Fer","dipplin":"Pomdramour","poltchageist":"Poltchageist","sinistcha":"Théffroyable","okidogi":"Félicanis","munkidori":"Fortusimia","fezandipiti":"Favianos","ogerpon":"Ogerpon","archaludon":"Pondralugon","hydrapple":"Pomdorochi","gouging-fire":"Feu-Perçant","raging-bolt":"Ire-Foudre","iron-boulder":"Roc-de-Fer","iron-crown":"Chef-de-Fer","terapagos":"Terapagos","pecharunt":"Pêchaminus"};
+
+const TYPE_COLORS = {
+  normal:'#A8A878', feu:'#EE8130', eau:'#6390F0', 'électrik':'#F7D02C', plante:'#7AC74C', glace:'#96D9D6',
+  combat:'#C22E28', poison:'#A33EA1', sol:'#E2BF65', vol:'#A98FF3', psy:'#F95587', insecte:'#A6B91A',
+  roche:'#B6A136', spectre:'#735797', dragon:'#6F35FC', 'ténèbres':'#705746', acier:'#B7B7CE', 'fée':'#D685AD'
+};
+const TYPE_FR = { normal:'normal', fire:'feu', water:'eau', electric:'électrik', grass:'plante', ice:'glace',
+  fighting:'combat', poison:'poison', ground:'sol', flying:'vol', psychic:'psy', bug:'insecte',
+  rock:'roche', ghost:'spectre', dragon:'dragon', dark:'ténèbres', steel:'acier', fairy:'fée' };
+
+/* ---------- Enclos disponibles ---------- */
+const PEN_TYPES = [
+  { id:'campagne', emoji:'🌾', name:'Campagne',    types:['normal'],              price:800,  terrain:'linear-gradient(160deg,#5d7c3a,#8aa84f)', deco:'🌿' },
+  { id:'foret',    emoji:'🌲', name:'Forêt',       types:['plante','insecte'],    price:1100, terrain:'linear-gradient(160deg,#1e4023,#3c7a3a)', deco:'🌳' },
+  { id:'lac',      emoji:'💧', name:'Lac',         types:['eau','glace'],         price:1300, terrain:'linear-gradient(160deg,#123c66,#2a7fb8)', deco:'💨' },
+  { id:'volcan',   emoji:'🌋', name:'Volcan',      types:['feu','sol'],           price:1500, terrain:'linear-gradient(160deg,#4a1410,#a3402a)', deco:'🔥' },
+  { id:'montagne', emoji:'⛰️', name:'Montagne',    types:['roche','acier'],       price:1500, terrain:'linear-gradient(160deg,#4a4a55,#7a7a8a)', deco:'🪨' },
+  { id:'grotte',   emoji:'🕳️', name:'Grotte sombre', types:['spectre','psy','poison','ténèbres'], price:1700, terrain:'linear-gradient(160deg,#1a1030,#3a2456)', deco:'✨' },
+  { id:'dojo',     emoji:'🏯', name:'Dojo',        types:['combat','électrik'],   price:1700, terrain:'linear-gradient(160deg,#3a2a12,#8a6a2a)', deco:'⚡' },
+  { id:'ciel',     emoji:'☁️', name:'Ciel ouvert', types:['vol','dragon','fée'],  price:2000, terrain:'linear-gradient(160deg,#25406e,#6ea0d8)', deco:'🌤️' },
+];
+const PEN_BASE_CAP = 3;
+
+/* ---------- Personnel ---------- */
+const STAFF = {
+  keeper: { emoji:'🍎', name:'Soigneur', desc:'Nourrit automatiquement tous les Pokémon chaque jour.', salary:60,  hireCost:400 },
+  guide:  { emoji:'🎤', name:'Guide',     desc:'+15% de visiteurs par guide.',                          salary:45,  hireCost:350 },
+  vet:    { emoji:'💉', name:'Infirmier', desc:'Les Pokémon malades guérissent seuls (+bonheur global).', salary:55, hireCost:500 },
+};
+
+/* ---------- État ---------- */
+const SAVE_KEY = 'pokezoo_save_v1';
+let zoo = null;
+let dayTimer = null, paused = false, daySpeed = 4500, rushToday = false;
+
+/* ---------- Utilitaires ---------- */
+const normName = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9♀♂. -]/g,'').trim();
+function frName(en){ return FR_NAMES[en] || (en||'').charAt(0).toUpperCase()+en.slice(1); }
+function typeFr(t){ return TYPE_FR[t] || t; }
+function fmt(n){ return n.toLocaleString('fr-FR'); }
+function toast(msg){
+  const w = document.getElementById('toasts');
+  const t = document.createElement('div');
+  t.className = 'toast'; t.innerHTML = msg;
+  w.appendChild(t);
+  setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .4s'; setTimeout(()=>t.remove(),400); }, 3600);
+}
+function logLine(html){
+  const box = document.getElementById('zooLog');
+  const d = document.createElement('div');
+  d.innerHTML = `<span class="l-day">[J${zoo?zoo.day:0}]</span> ${html}`;
+  box.prepend(d);
+  while (box.children.length > 60) box.lastChild.remove();
+}
+function findEnFromInput(input){
+  const q = normName(input);
+  if (!q) return null;
+  for (const en in FR_NAMES) if (en === q || normName(FR_NAMES[en]) === q) return en;
+  for (const en in FR_NAMES) if (normName(FR_NAMES[en]).startsWith(q)) return en;
+  return null;
+}
+function penById(id){ return zoo.pens.find(p=>p.uid===id); }
+function accepts(pen, types){ const acc = pen.accepts || (PEN_TYPES.find(t=>t.id===pen.type)||{types:[]}).types; return types.some(t=>acc.includes(t)); }
+function rarityOf(bt){ return bt >= 580 ? 'legend' : bt >= 460 ? 'rare' : 'common'; }
+
+/* ---------- Création ---------- */
+const EMOJIS = ['🏞️','🌳','🏰','🌈','⛰️','🌊','🔥','❄️','⭐'];
+let pickedEmoji = '🏞️';
+(function initSetup(){
+  const box = document.getElementById('emojiPicks');
+  EMOJIS.forEach((e,i)=>{
+    const b = document.createElement('div');
+    b.className = 'emoji-pick' + (i===0?' sel':'');
+    b.textContent = e;
+    b.onclick = ()=>{ document.querySelectorAll('.emoji-pick').forEach(x=>x.classList.remove('sel')); b.classList.add('sel'); pickedEmoji = e; };
+    box.appendChild(b);
+  });
+  const inp = document.getElementById('zooNameInput');
+  const btn = document.getElementById('createZooBtn');
+  inp.addEventListener('input', ()=> btn.disabled = inp.value.trim().length < 2);
+  btn.addEventListener('click', ()=>{
+    const saved = JSON.parse(localStorage.getItem(SAVE_KEY)||'null');
+    if (saved && !confirm('Une sauvegarde existe déjà. La remplacer par un nouveau zoo ?')) return;
+    startZoo(inp.value.trim(), pickedEmoji);
+  });
+  if (saved_zoo()) { startZoo(null, null, true); }
+})();
+function saved_zoo(){ try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); return s && s.name ? s : null; } catch(e){ return null; } }
+
+function startZoo(name, emoji, fromSave){
+  if (fromSave) { zoo = saved_zoo(); }
+  else {
+    zoo = {
+      name, emoji, day:1, money:5000, ticket:12,
+      pens:[ { uid:Date.now(), type:'campagne', accepts:['normal'], cap:PEN_BASE_CAP, residents:[] } ],
+      staff:{ keeper:0, guide:0, vet:0 },
+      log:[], visitorsToday:0, netToday:0
+    };
+    logLine('🎉 Le zoo <b>'+name+'</b> ouvre ses portes !');
+  }
+  document.getElementById('setup').style.display = 'none';
+  document.getElementById('zooUI').style.display = 'block';
+  document.getElementById('titleName').textContent = `${zoo.emoji} ${zoo.name}`;
+  buildDayTimer();
+  renderAll();
+  save();
+}
+
+/* ---------- Timer / cycle de jour ---------- */
+function buildDayTimer(){
+  if (dayTimer) clearInterval(dayTimer);
+  dayTimer = setInterval(nextDay, daySpeed);
+  paused = false;
+  document.getElementById('pauseBtn').textContent = '⏸ Pause';
+}
+document.getElementById('pauseBtn').addEventListener('click', function(){
+  paused = !paused;
+  this.textContent = paused ? '▶ Reprendre' : '⏸ Pause';
+});
+document.querySelectorAll('.speed-btn').forEach(b=>{
+  b.addEventListener('click', ()=>{
+    daySpeed = +b.dataset.s;
+    document.querySelectorAll('.speed-btn').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    if (!paused) buildDayTimer();
+  });
+});
+
+/* ---------- Fin de journée ---------- */
+function nextDay(){
+  if (paused || !zoo) return;
+  zoo.day++;
+  let income = 0, costs = 0;
+
+  // Bonheur qui baisse + fuites
+  zoo.pens.forEach(pen=>{
+    pen.residents = pen.residents.filter(r=>{
+      r.happy = Math.max(0, r.happy - (8 + Math.floor(Math.random()*7)));
+      if (r.happy < 15 && Math.random() < 0.35) {
+        logLine(`<span class="l-bad">💔 ${r.name} s'est enfui ! (bonheur trop bas)</span>`);
+        toast(`💔 ${r.name} s'est enfui du zoo ! Nourris mieux tes Pokémon !`);
+        return false;
+      }
+      return true;
+    });
+  });
+
+  // Visiteurs
+  const attract = attractiveness();
+  const priceFactor = Math.max(0.35, 1.6 - zoo.ticket/18);
+  let visitors = Math.round(attract * 1.4 * priceFactor * (1 + zoo.staff.guide*0.15) * (0.85 + Math.random()*0.3));
+  if (rushToday) { visitors = Math.round(visitors*1.6); rushToday = false; logLine('<span class="l-gold">🎉 Affluence exceptionnelle !</span>'); }
+  zoo.visitorsToday = visitors;
+  income = visitors * zoo.ticket;
+
+  // Salaires + nourriture auto
+  costs += zoo.staff.keeper * STAFF.keeper.salary + zoo.staff.guide * STAFF.guide.salary + zoo.staff.vet * STAFF.vet.salary;
+  zoo.pens.forEach(pen=>{
+    if (zoo.staff.keeper > 0) {
+      pen.residents.forEach(r=>{ if (r.happy < 95) { r.happy = Math.min(100, r.happy + 32); costs += 10; } });
+    }
+  });
+  // Vétérinaire : petit bonus bonheur
+  if (zoo.staff.vet > 0) {
+    zoo.pens.forEach(p=>p.residents.forEach(r=>{ r.happy = Math.min(100, r.happy + 4*zoo.staff.vet); }));
+  }
+
+  zoo.netToday = income - costs;
+  zoo.money += zoo.netToday;
+
+  // Événements aléatoires (12%)
+  if (Math.random() < 0.12) {
+    const ev = Math.floor(Math.random()*4);
+    if (ev===0) { rushToday = true; logLine(' 📣 Demain, gros rush de visiteurs annoncé !'); }
+    else if (ev===1) { const gift = 100+Math.floor(Math.random()*400); zoo.money += gift; logLine(`<span class="l-gold">💝 Un visiteur généreux fait un don de ${fmt(gift)} ₽ !</span>`); }
+    else if (ev===2) { zoo.pens.forEach(p=>p.residents.forEach(r=>r.happy=Math.max(0,r.happy-5))); logLine('🌧️ Il pleut toute la journée — le moral baisse un peu.'); }
+    else { logLine('📸 Un dresseur célèbre visite ton zoo — réputation en hausse !'); }
+  }
+
+  if (zoo.money < 0) {
+    logLine('<span class="l-bad">🚨 Banquier : découvert ! Vends des Pokémon ou augmente tes revenus.</span>');
+    toast('🚨 Ton zoo est en déficit !');
+  }
+
+  document.getElementById('dayLabel').textContent = 'Jour '+zoo.day;
+  renderAll();
+  save();
+}
+
+/* ---------- Attractivité & réputation ---------- */
+function attractiveness(){
+  if (!zoo) return 0;
+  let a = 0;
+  zoo.pens.forEach(p=>p.residents.forEach(r=>{ a += ((r.bt ?? r.baseTotal ?? 300)/9) * (0.3 + r.happy/100); }));
+  return Math.round(a);
+}
+function speciesCount(){ const s = new Set(); zoo.pens.forEach(p=>p.residents.forEach(r=>s.add(r.id))); return s.size; }
+function avgHappy(){ let n=0,t=0; zoo.pens.forEach(p=>p.residents.forEach(r=>{t++;n+=r.happy;})); return t? n/t : 0; }
+function stars(){
+  const score = avgHappy()/20 + Math.min(speciesCount(),10)/4 + attractiveness()/60;
+  const k = Math.max(0, Math.min(5, Math.floor(score/1.6)));
+  return '★'.repeat(k) + '☆'.repeat(5-k);
+}
+function season(){
+  const s = ['🌸 Printemps','☀️ Été','🍂 Automne','❄️ Hiver'];
+  return s[Math.floor((zoo.day-1)/7) % 4];
+}
+
+/* ---------- Rendu ---------- */
+function renderAll(){
+  if (!zoo) return;
+  document.getElementById('hudMoney').textContent = fmt(zoo.money)+' ₽';
+  const net = zoo.netToday||0;
+  const netEl = document.getElementById('hudNet');
+  netEl.textContent = (net>=0?'+':'') + fmt(net) + ' ₽ / jour';
+  netEl.style.color = net>=0 ? 'var(--green)' : 'var(--red)';
+  document.getElementById('hudVisitors').textContent = fmt(zoo.visitorsToday||0);
+  const cap = zoo.pens.reduce((a,p)=>a+p.cap,0), used = zoo.pens.reduce((a,p)=>a+p.residents.length,0);
+  document.getElementById('hudPens').textContent = zoo.pens.length;
+  document.getElementById('hudCap').textContent = used+'/'+cap;
+  document.getElementById('hudSpecies').textContent = speciesCount();
+  document.getElementById('hudStars').textContent = stars();
+  document.getElementById('hudDay').textContent = 'Jour '+zoo.day;
+  document.getElementById('hudSeason').textContent = season();
+  document.getElementById('attractInfo').textContent = `— attractivité : ${attractiveness()}`;
+  renderPens(); renderPenShop(); renderStaff();
+  document.getElementById('ticketPrice').textContent = zoo.ticket+' ₽';
+}
+
+function renderPens(){
+  const grid = document.getElementById('penGrid');
+  grid.innerHTML = '';
+  if (!zoo.pens.length) {
+    grid.innerHTML = '<div class="empty-zoo">Aucun enclos — achète-en un dans la boutique 🏗️</div>';
+    return;
+  }
+  zoo.pens.forEach(pen=>{
+    const pt = PEN_TYPES.find(t=>t.id===pen.type);
+    const penAcc = pen.accepts || (pt ? pt.types : []);
+    const div = document.createElement('div');
+    div.className = 'pen';
+    const terr = pen.residents.map(r=>{
+      const mood = r.happy>=70?'happy':(r.happy<30?'sad':'');
+      return `<img src="${r.sprite}" title="${r.name} — bonheur ${r.happy}%" class="${mood}">`;
+    }).join('');
+    const emptySlots = Math.max(0, pen.cap - pen.residents.length);
+    const residentsHtml = pen.residents.map(r=>`
+      <div class="resident">
+        <img src="${r.sprite}">
+        <div class="rinfo">
+          <div class="rname">${r.name} <span style="color:var(--muted);font-size:.8em">${r.typeBadges}</span></div>
+          <div class="htrack"><div class="hfill" style="width:${r.happy}%;background:${r.happy>=70?'var(--green)':(r.happy>=35?'var(--gold)':'var(--red)')}"></div></div>
+        </div>
+        <div class="ract">
+          <button class="ico-btn" title="Nourrir (10 ₽)" onclick="feedOne(${pen.uid},${r.id})">🍎</button>
+          <button class="ico-btn" title="Vendre (rembourse ~55%)" onclick="sellOne(${pen.uid},${r.id})">💰</button>
+        </div>
+      </div>`).join('');
+    div.innerHTML = `
+      <div class="pen-head">
+        <span class="pen-emoji">${pt.emoji}</span>
+        <div>
+          <div class="pen-name">${pt.name}</div>
+          <div class="pen-types">${penAcc.map(t=>`<span class="type-badge" style="background:${TYPE_COLORS[t]||'#888'}">${t}</span>`).join('')}</div>
+        </div>
+        <span class="pen-count">${pen.residents.length}/${pen.cap} places</span>
+      </div>
+      <div class="pen-terrain" style="background:${pt.terrain}">${terr}${'<span class="slot-empty">＋</span>'.repeat(emptySlots)}<span style="position:absolute;right:10px;font-size:1.5em;opacity:.7;z-index:1">${pt.deco}</span></div>
+      ${residentsHtml || '<p class="hint" style="text-align:center;padding:8px 0">Enclos vide — adopte un Pokémon compatible !</p>'}
+      <div class="pen-actions">
+        <button class="btn btn-gray btn-small" onclick="feedPen(${pen.uid})">🍎 Nourrir l'enclos (${fmt(pen.residents.length*10)} ₽)</button>
+        ${pen.cap < 8 ? `<button class="btn btn-gray btn-small" onclick="upgradePen(${pen.uid})">📐 Agrandir (+2 places — ${fmt(pen.type==='campagne'?600:800)} ₽)</button>` : '<span class="hint" style="align-self:center">Taille max</span>'}
+      </div>`;
+    grid.appendChild(div);
+  });
+}
+
+function renderPenShop(){
+  const box = document.getElementById('penShop');
+  box.innerHTML = '';
+  PEN_TYPES.filter(pt=>pt.id!=='campagne' || !zoo.pens.some(p=>p.type==='campagne')).forEach(pt=>{
+    const count = zoo.pens.filter(p=>p.type===pt.id).length;
+    const price = Math.round(pt.price * Math.pow(1.35, count));
+    const div = document.createElement('div');
+    div.className = 'shop-item' + (zoo.money<price?' locked':'');
+    div.innerHTML = `
+      <span class="si-emoji">${pt.emoji}</span>
+      <div>
+        <div class="si-name">${pt.name}</div>
+        <div class="si-desc">Types : ${pt.types.join(', ')} · ${PEN_BASE_CAP} places</div>
+      </div>
+      <div class="si-price">
+        <div class="price">${fmt(price)} ₽</div>
+        <button class="btn btn-small btn-green" style="margin-top:6px" ${zoo.money<price?'disabled':''}>Acheter</button>
+      </div>`;
+    div.querySelector('button').addEventListener('click', ()=>{
+      zoo.money -= price;
+      zoo.pens.push({ uid:Date.now()+Math.floor(Math.random()*999), type:pt.id, accepts:pt.types.slice(), cap:PEN_BASE_CAP, residents:[] });
+      logLine(`🏗️ Nouvel enclos <b>${pt.name}</b> construit (-${fmt(price)} ₽)`);
+      toast(`🏗️ Enclos ${pt.name} construit !`);
+      renderAll(); save();
+    });
+    box.appendChild(div);
+  });
+}
+
+function renderStaff(){
+  const box = document.getElementById('staffBox');
+  box.innerHTML = '';
+  ['keeper','guide','vet'].forEach(k=>{
+    const s = STAFF[k];
+    const div = document.createElement('div');
+    div.className = 'staff-card';
+    div.innerHTML = `
+      <div class="flexrow">
+        <span class="s-emoji">${s.emoji}</span>
+        <div>
+          <div class="s-name">${s.name} <span class="staff-count">×${zoo.staff[k]}</span></div>
+          <div class="s-desc">${s.desc}<br>Salaire : ${s.salary} ₽/jour · embauche : ${s.hireCost} ₽</div>
+        </div>
+        <div class="s-cta">
+          <button class="btn btn-small btn-green" ${zoo.money<s.hireCost?'disabled':''}>＋</button>
+          ${zoo.staff[k]>0?'<br><button class="btn btn-gray btn-small" style="margin-top:6px">−</button>':''}
+        </div>
+      </div>`;
+    const plus = div.querySelector('.btn-green');
+    plus.addEventListener('click', ()=>{ zoo.money -= s.hireCost; zoo.staff[k]++; logLine(`👷 ${s.name} embauché ! (-${fmt(s.hireCost)} ₽)`); renderAll(); save(); });
+    const minus = div.querySelector('.btn-gray');
+    if (minus) minus.addEventListener('click', ()=>{ if (zoo.staff[k]>0){ zoo.staff[k]--; logLine(`👋 Un ${s.name.toLowerCase()} part.`); renderAll(); save(); } });
+    box.appendChild(div);
+  });
+}
+
+/* ---------- Actions ---------- */
+window.feedOne = function(penUid, pid){
+  const pen = penById(penUid); if (!pen) return;
+  const r = pen.residents.find(x=>x.id===pid); if (!r) return;
+  if (zoo.money < 10) return toast('💸 Pas assez d\'argent pour nourrir !');
+  if (r.happy >= 100) return toast('😊 '+r.name+' est déjà repu !');
+  zoo.money -= 10;
+  r.happy = Math.min(100, r.happy + 30);
+  renderAll(); save();
+};
+window.feedPen = function(penUid){
+  const pen = penById(penUid); if (!pen) return;
+  const hungry = pen.residents.filter(r=>r.happy<100);
+  if (!hungry.length) return toast('😊 Tout le monde est repu !');
+  const cost = hungry.length*10;
+  if (zoo.money < cost) return toast('💸 Pas assez d\'argent !');
+  zoo.money -= cost;
+  hungry.forEach(r=>r.happy = Math.min(100, r.happy+30));
+  renderAll(); save();
+};
+window.sellOne = function(penUid, pid){
+  const pen = penById(penUid); if (!pen) return;
+  const i = pen.residents.findIndex(x=>x.id===pid); if (i<0) return;
+  const r = pen.residents[i];
+  const refund = Math.round(r.price * (0.4 + r.happy/100*0.25));
+  if (!confirm(`Vendre ${r.name} pour ${fmt(refund)} ₽ ?`)) return;
+  pen.residents.splice(i,1);
+  zoo.money += refund;
+  logLine(`💰 ${r.name} adopté par un autre zoo (+${fmt(refund)} ₽)`);
+  renderAll(); save();
+};
+window.upgradePen = function(penUid){
+  const pen = penById(penUid); if (!pen || pen.cap>=8) return;
+  const cost = pen.type==='campagne'?600:800;
+  if (zoo.money < cost) return toast('💸 Pas assez d\'argent !');
+  zoo.money -= cost; pen.cap += 2;
+  logLine(`📐 Enclos agrandi (${pen.cap} places)`);
+  renderAll(); save();
+};
+
+/* ---------- Adoption (PokéAPI) ---------- */
+async function fetchPokemon(input){
+  const q = normName(input).replace(/ /g,'-');
+  if (!q) return null;
+  const url = /^-?\d+$/.test(q) ? `https://pokeapi.co/api/v2/pokemon/${q}` : `https://pokeapi.co/api/v2/pokemon/${q}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const d = await res.json();
+    return d;
+  } catch(e){ return null; }
+}
+function priceOf(d){
+  const bt = d.stats.reduce((a,s)=>a+s.base_stat,0);
+  const legendary = bt >= 580;
+  return { price: Math.round((bt*2 + (legendary? 4000 : 0))/1), bt, legendary };
+}
+document.getElementById('adoptSearchBtn').addEventListener('click', doAdoptSearch);
+document.getElementById('adoptInput').addEventListener('keydown', e=>{ if (e.key==='Enter') doAdoptSearch(); });
+let lastAdopt = null;
+async function doAdoptSearch(){
+  const input = document.getElementById('adoptInput').value.trim();
+  if (!input) return;
+  const prev = document.getElementById('adoptPreview');
+  prev.innerHTML = '<p class="hint">⏳ Recherche...</p>';
+  const en = findEnFromInput(input) || normName(input).replace(/ /g,'-');
+  const d = await fetchPokemon(en);
+  if (!d) { prev.innerHTML = '<p class="hint">❌ Pokémon introuvable — essaie un autre nom (en français !).</p>'; return; }
+  const types = d.types.map(t=>typeFr(t.type.name));
+  const bt = d.stats.reduce((a,s)=>a+s.base_stat,0);
+  const { price, legendary } = priceOf(d);
+  const compat = zoo.pens.filter(p=>accepts(p, types));
+  const sprite = (d.sprites && d.sprites.other && d.sprites.other['official-artwork'] && d.sprites.other['official-artwork'].front_default) || d.sprites.front_default;
+  const typeBadges = types.map(t=>`<span class="type-badge" style="background:${TYPE_COLORS[t]||'#888'}">${t}</span>`).join('');
+  const canPay = zoo.money >= price;
+  const hasSpace = compat.some(p=>p.residents.length < p.cap);
+  lastAdopt = { id:d.id, name:frName(d.name), types, price, sprite, legendary };
+  prev.innerHTML = `
+    <div class="adopt-card">
+      <img src="${sprite}">
+      <div class="adopt-info">
+        <div class="a-name">${frName(d.name)} ${legendary?'<span class="legend-tag">✨ LÉGENDAIRE</span>':''}</div>
+        <div class="a-types">${typeBadges}</div>
+        <div class="a-stats">Puissance de base : <b>${bt}</b> · Attractivité : <b style="color:#6ee7ff">+${Math.round(bt/9)}</b> visiteurs potentiels</div>
+        <div class="a-stats" style="margin-top:4px">${compat.length ? 'Enclos compatibles : <b>'+compat.map(p=>PEN_TYPES.find(t=>t.id===p.type).name).join(', ')+'</b>' : '⚠️ Aucun enclos compatible — achète-en un adapté !'}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="price" style="font-size:1.3em">${fmt(price)} ₽</div>
+        <button class="btn btn-green" id="adoptConfirmBtn" style="margin-top:8px" ${(!canPay||!hasSpace)?'disabled':''}>🥚 Adopter</button>
+        <p class="hint" style="margin-top:6px">${!canPay?'Fonds insuffisants':(!hasSpace?'Aucune place libre':'')}</p>
+      </div>
+    </div>`;
+  document.getElementById('adoptConfirmBtn').addEventListener('click', ()=>{
+    const target = compat.find(p=>p.residents.length < p.cap);
+    if (!target) return;
+    zoo.money -= price;
+    target.residents.push({ id:d.id, name:frName(d.name), sprite, happy:85, bt, typeBadges });
+    logLine(`🥚 <b>${frName(d.name)}</b> rejoint le zoo ! (-${fmt(price)} ₽)`);
+    toast(`🎉 ${frName(d.name)} a été adopté !`);
+    lastAdopt = null;
+    prev.innerHTML = '';
+    renderAll(); save();
+  });
+}
+
+/* ---------- Sauvegarde ---------- */
+function save(){ try { localStorage.setItem(SAVE_KEY, JSON.stringify(zoo)); } catch(e){} }
+window.addEventListener('beforeunload', save);
+
+/* ---------- Réinitialisation ---------- */
+document.getElementById('resetBtn').addEventListener('click', ()=>{
+  if (!confirm('Supprimer ce zoo et repartir de zéro ?')) return;
+  localStorage.removeItem(SAVE_KEY);
+  location.reload();
+});
+
+/* ---------- Suggestions de noms (gen 1) ---------- */
+(async function loadNames(){
+  const dl = document.getElementById('zooNames');
+  try {
+    const res = await fetch('https://pokeapi.co/api/v2/pokemon?limit=151');
+    const d = await res.json();
+    d.results.forEach(p=>{
+      const opt = document.createElement('option');
+      opt.value = frName(p.name);
+      dl.appendChild(opt);
+    });
+  } catch(e){}
+})();
+</script>
+</body>
+</html>

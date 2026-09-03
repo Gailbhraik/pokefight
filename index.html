@@ -277,10 +277,18 @@
     -webkit-text-fill-color:transparent;
   }
   #resultText { -webkit-text-fill-color:initial; background:none; text-shadow:0 0 26px rgba(124,92,255,.9), 0 2px 8px rgba(0,0,0,.7); }
+  a.zoo-link {
+    position:fixed; top:18px; right:20px; z-index:50; text-decoration:none;
+    background:var(--card2); color:var(--txt); border:1px solid var(--stroke2);
+    padding:9px 18px; border-radius:14px; font-weight:700; font-size:.9em;
+    transition:transform .15s, background .2s; backdrop-filter:blur(10px); font-family:inherit;
+  }
+  a.zoo-link:hover { background:rgba(255,255,255,.14); transform:translateY(-2px); }
 </style>
 </head>
 <body>
 <canvas id="bg3d"></canvas>
+<a class="zoo-link" href="zoo.html">🏞️ Mon Zoo</a>
 <h1><span class="emoji">⚔️</span> <span class="grad">PokéFight</span></h1>
 <p class="subtitle">L'arène Pokémon nouvelle génération — scène 3D temps réel, personnalisation complète et combats au tour par tour.</p>
 
