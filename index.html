@@ -102,6 +102,46 @@
   .move-info { display:block; font-size:.75em; font-weight:normal; opacity:.9; margin-top:3px; }
   .shake { animation:shake .4s; }
   @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
+  /* ---------- Animations d'attaque ---------- */
+  .fx-layer { position:absolute; inset:0; pointer-events:none; z-index:4; }
+  .lunge-you { animation: lungeYou .45s ease-in-out; }
+  @keyframes lungeYou { 0%{transform:scaleX(1.25)} 35%{transform:scaleX(1.25) translate(60px,-38px)} 100%{transform:scaleX(1.25)} }
+  .lunge-foe { animation: lungeFoe .45s ease-in-out; }
+  @keyframes lungeFoe { 0%{transform:none} 35%{transform:translate(-60px,38px)} 100%{transform:none} }
+  .charge { animation: charge .45s ease-in; }
+  @keyframes charge { 0%{filter:brightness(1)} 60%{filter:brightness(2.2) saturate(1.6) drop-shadow(0 0 18px var(--fxcolor,#fff))} 100%{filter:brightness(1)} }
+  .hit-flash { animation: hitFlash .45s; }
+  @keyframes hitFlash { 0%,40%{filter:brightness(3) saturate(.2)} 100%{filter:brightness(1)} }
+  .dodge { animation: dodge .45s; }
+  @keyframes dodge { 0%,100%{transform:none} 50%{transform:translate(20px,-16px) scale(1.08)} }
+  .faint { animation: faint .9s ease-in forwards; }
+  @keyframes faint { 0%{opacity:1;filter:brightness(3)} 100%{transform:translateY(55px) rotate(85deg);opacity:0} }
+  .fx-projectile {
+    position:absolute; transform:translate(-50%,-50%); font-size:2em;
+    filter:drop-shadow(0 0 8px var(--fxcolor,#fff));
+  }
+  .fx-particle {
+    position:absolute; transform:translate(-50%,-50%); font-size:1.5em;
+    animation: fxParticle .75s ease-out forwards;
+  }
+  @keyframes fxParticle {
+    0% { transform:translate(-50%,-50%) scale(.5); opacity:1; }
+    100% { transform:translate(calc(-50% + var(--dx,0px)), calc(-50% + var(--dy,0px))) scale(1.35); opacity:0; }
+  }
+  .fx-ring {
+    position:absolute; width:22px; height:22px; border-radius:50%;
+    transform:translate(-50%,-50%); border:4px solid #fff;
+    animation: fxRing .5s ease-out forwards;
+  }
+  @keyframes fxRing { 0%{transform:translate(-50%,-50%) scale(.4);opacity:.9} 100%{transform:translate(-50%,-50%) scale(4.2);opacity:0} }
+  .dmg-float {
+    position:absolute; transform:translate(-50%,-50%); font-size:1.7em; font-weight:bold;
+    color:#ff5555; text-shadow:0 2px 4px rgba(0,0,0,.7); z-index:5;
+    animation: dmgFloat .95s ease-out forwards;
+  }
+  @keyframes dmgFloat { 0%{transform:translate(-50%,-50%) scale(.7);opacity:0} 15%{opacity:1;transform:translate(-50%,-70%) scale(1.15)} 100%{transform:translate(-50%,-170%) scale(1);opacity:0} }
+  .shake-hard { animation: shakeHard .45s; }
+  @keyframes shakeHard { 0%,100%{transform:none} 20%{transform:translate(6px,4px)} 40%{transform:translate(-7px,-3px)} 60%{transform:translate(5px,-5px)} 80%{transform:translate(-4px,3px)} }
   #result {
     position:absolute; inset:0; display:none; align-items:center; justify-content:center;
     background:rgba(0,0,0,.65); z-index:5; font-size:2em; font-weight:bold; text-shadow:0 0 20px gold;
@@ -196,6 +236,7 @@
           <div class="hp-track"><div class="hp-fill" id="youFill" style="width:100%"></div></div>
         </div>
       </div>
+      <div class="fx-layer" id="fxLayer"></div>
       <div id="result"><div id="resultText"></div><button class="btn" id="againBtn">🔄 Revanche</button></div>
     </div>
     <div class="log" id="log"></div>
@@ -504,9 +545,97 @@ function log(msg, color){
   el.scrollTop = el.scrollHeight;
 }
 
-function animHit(side){
-  const sprite = document.getElementById(side === 'you' ? 'youSprite' : 'foeSprite');
-  sprite.classList.remove('shake'); void sprite.offsetWidth; sprite.classList.add('shake');
+// ============ ANIMATIONS ============
+const TYPE_FX = {
+  feu:'🔥', eau:'💧', 'électrik':'⚡', plante:'🍃', glace:'❄️', combat:'💥', poison:'☠️',
+  sol:'💨', vol:'🌪️', psy:'✨', insecte:'✳️', roche:'🪨', spectre:'👻', dragon:'💫',
+  'ténèbres':'🌑', acier:'⚙️', 'fée':'⭐', normal:'💫'
+};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function spriteEl(side){ return document.getElementById(side === 'you' ? 'youSprite' : 'foeSprite'); }
+function spriteCenter(side){
+  const r = spriteEl(side).getBoundingClientRect();
+  const a = document.getElementById('arena').getBoundingClientRect();
+  return { x: r.left + r.width/2 - a.left, y: r.top + r.height/2 - a.top };
+}
+function fxLayer(){ return document.getElementById('fxLayer'); }
+
+function animLunge(side){
+  const el = spriteEl(side);
+  const cls = side === 'you' ? 'lunge-you' : 'lunge-foe';
+  el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
+  return sleep(450);
+}
+function animCharge(side, move){
+  const el = spriteEl(side);
+  el.style.setProperty('--fxcolor', TYPE_COLORS[move.type] || '#fff');
+  el.classList.remove('charge'); void el.offsetWidth; el.classList.add('charge');
+  return sleep(450);
+}
+function animProjectile(from, to, move){
+  const a = spriteCenter(from), b = spriteCenter(to);
+  const el = document.createElement('div');
+  el.className = 'fx-projectile';
+  el.textContent = TYPE_FX[move.type] || '💫';
+  el.style.setProperty('--fxcolor', TYPE_COLORS[move.type] || '#fff');
+  el.style.left = a.x + 'px'; el.style.top = a.y + 'px';
+  fxLayer().appendChild(el);
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    el.style.transition = 'left .38s linear, top .38s linear';
+    el.style.left = b.x + 'px'; el.style.top = b.y + 'px';
+  }));
+  return sleep(430).then(() => el.remove());
+}
+function animImpact(side, move, eff){
+  const c = spriteCenter(side);
+  const color = TYPE_COLORS[move.type] || '#fff';
+  const emoji = TYPE_FX[move.type] || '💥';
+  // gerbe de particules colorées
+  for(let i = 0; i < 10; i++){
+    const p = document.createElement('div');
+    p.className = 'fx-particle';
+    p.textContent = Math.random() < .65 ? emoji : '✦';
+    p.style.setProperty('--fxcolor', color);
+    p.style.color = color;
+    const ang = Math.random() * Math.PI * 2, dist = 40 + Math.random() * 70;
+    p.style.setProperty('--dx', Math.cos(ang) * dist + 'px');
+    p.style.setProperty('--dy', Math.sin(ang) * dist + 'px');
+    p.style.left = c.x + 'px'; p.style.top = c.y + 'px';
+    fxLayer().appendChild(p);
+    setTimeout(() => p.remove(), 800);
+  }
+  // onde de choc
+  const ring = document.createElement('div');
+  ring.className = 'fx-ring';
+  ring.style.borderColor = color;
+  ring.style.left = c.x + 'px'; ring.style.top = c.y + 'px';
+  fxLayer().appendChild(ring);
+  setTimeout(() => ring.remove(), 600);
+  // cible : flash blanc + tremblement
+  const el = spriteEl(side);
+  el.classList.remove('shake', 'hit-flash'); void el.offsetWidth;
+  el.classList.add('shake', 'hit-flash');
+  // super efficace : l'arène entière tremble
+  if(eff >= 2){
+    const ar = document.getElementById('arena');
+    ar.classList.remove('shake-hard'); void ar.offsetWidth; ar.classList.add('shake-hard');
+  }
+}
+function dmgFloat(side, dmg, eff){
+  const c = spriteCenter(side);
+  const el = document.createElement('div');
+  el.className = 'dmg-float';
+  el.textContent = '-' + dmg;
+  if(eff >= 2) el.style.color = '#ffe135';
+  if(eff === 0) el.style.color = '#aaa';
+  el.style.left = c.x + 'px'; el.style.top = (c.y - 55) + 'px';
+  fxLayer().appendChild(el);
+  setTimeout(() => el.remove(), 1000);
+}
+function animFaint(side){
+  const el = spriteEl(side);
+  el.classList.remove('shake', 'hit-flash', 'charge');
+  el.classList.add('faint');
 }
 
 function setMovesEnabled(on){
@@ -533,31 +662,51 @@ function effMsg(eff){
   return "";
 }
 
-function doAttack(attacker, defender, move, attackerLabel, defenderLabel, spriteHitId){
+async function doAttack(attacker, defender, move, attackerLabel, defenderLabel, atkSide, defSide){
+  log(`${attackerLabel} utilise <b>${move.name}</b> !`);
+  await sleep(350);
   if(Math.random() * 100 > move.accuracy){
+    // raté : la cible esquive
+    const d = spriteEl(defSide);
+    d.classList.remove('dodge'); void d.offsetWidth; d.classList.add('dodge');
     log(`${attackerLabel} utilise <b>${move.name}</b>... mais ça échoue !`, '#ffaaaa');
+    await sleep(550);
     return;
   }
   const { dmg, eff } = calcDamage(attacker, defender, move);
+  // physique : le pokemon fonce sur sa cible ; spécial : charge puis projectile
+  if(move.damageClass === 'physical'){
+    await animLunge(atkSide);
+  } else {
+    await animCharge(atkSide, move);
+    await animProjectile(atkSide, defSide, move);
+  }
   defender.hp = Math.max(0, defender.hp - dmg);
-  animHit(spriteHitId);
-  log(`${attackerLabel} utilise <b>${move.name}</b> ! ${defenderLabel} perd <b>${dmg}</b> PV.${effMsg(eff)}`, eff>=2?'#7dff7d':eff===0?'#ffaaaa':undefined);
+  animImpact(defSide, move, eff);
+  dmgFloat(defSide, dmg, eff);
   refreshBars();
+  log(`${attackerLabel} utilise <b>${move.name}</b> ! ${defenderLabel} perd <b>${dmg}</b> PV.${effMsg(eff)}`,
+      eff>=2?'#7dff7d':eff===0?'#ffaaaa':undefined);
+  await sleep(650);
+  if(defender.hp <= 0) animFaint(defSide);
+  await sleep(450);
 }
 
 function checkEnd(){
+  const show = html => {
+    document.getElementById('result').style.display = 'flex';
+    document.getElementById('resultText').innerHTML = html;
+  };
   if(foe.hp <= 0){
     gameOver = true;
-    document.getElementById('result').style.display = 'flex';
-    document.getElementById('resultText').innerHTML = `🏆 <span style="color:gold">VICTOIRE !</span><br><span class="msg">${foe.name} est K.O. !</span>`;
     setMovesEnabled(false);
+    setTimeout(() => show(`🏆 <span style="color:gold">VICTOIRE !</span><br><span class="msg">${foe.name} est K.O. !</span>`), 900);
     return true;
   }
   if(you.hp <= 0){
     gameOver = true;
-    document.getElementById('result').style.display = 'flex';
-    document.getElementById('resultText').innerHTML = `💀 <span style="color:#ff8080">DÉFAITE...</span><br><span class="msg">${you.name} est K.O. !</span>`;
     setMovesEnabled(false);
+    setTimeout(() => show(`💀 <span style="color:#ff8080">DÉFAITE...</span><br><span class="msg">${you.name} est K.O. !</span>`), 900);
     return true;
   }
   return false;
@@ -568,16 +717,15 @@ async function playerAttack(i){
   yourTurn = false;
   setMovesEnabled(false);
   const move = you.moves[i];
-  doAttack(you, foe, move, `Ton ${you.name}`, `le ${foe.name} adverse`, 'foeSprite');
+  await doAttack(you, foe, move, `Ton ${you.name}`, `le ${foe.name} adverse`, 'you', 'foe');
   if(checkEnd()) return;
-  setTimeout(() => {
-    // tour de l'adversaire : attaque la plus efficace disponible (simple IA)
-    const best = foe.moves.map(m => ({m, e: typeEffect(m.type, you.types)})).sort((a,b)=>b.e-a.e)[0];
-    doAttack(foe, you, best.m, `Le ${foe.name} adverse`, `ton ${you.name}`, 'youSprite');
-    if(checkEnd()) return;
-    yourTurn = true;
-    setMovesEnabled(true);
-  }, 1100);
+  await sleep(350);
+  // tour de l'adversaire : attaque la plus efficace disponible (simple IA)
+  const best = foe.moves.map(m => ({m, e: typeEffect(m.type, you.types)})).sort((a,b)=>b.e-a.e)[0];
+  await doAttack(foe, you, best.m, `Le ${foe.name} adverse`, `ton ${you.name}`, 'foe', 'you');
+  if(checkEnd()) return;
+  yourTurn = true;
+  setMovesEnabled(true);
 }
 
 function startBattle(){
@@ -601,6 +749,8 @@ function startBattle(){
   document.getElementById('foeName').textContent = `${foe.name} N.${foe.level}`;
   document.getElementById('youSprite').src = you.backSprite || you.sprite;
   document.getElementById('foeSprite').src = foe.sprite;
+  for(const id of ['youSprite','foeSprite']) document.getElementById(id).className = 'battle-sprite';
+  document.getElementById('fxLayer').innerHTML = '';
   refreshBars();
   document.getElementById('log').innerHTML = '';
   log(`⚡ Le combat commence : <b>${you.name} N.${you.level}</b> vs <b>${foe.name} N.${foe.level}</b> !`);
@@ -609,11 +759,12 @@ function startBattle(){
   } else {
     log(`Le ${foe.name} adverse est plus rapide !`);
     yourTurn = false;
-    setTimeout(() => {
+    (async () => {
+      await sleep(500);
       const best = foe.moves[Math.floor(Math.random()*foe.moves.length)];
-      doAttack(foe, you, best, `Le ${foe.name} adverse`, `ton ${you.name}`, 'youSprite');
+      await doAttack(foe, you, best, `Le ${foe.name} adverse`, `ton ${you.name}`, 'foe', 'you');
       if(!checkEnd()){ yourTurn = true; setMovesEnabled(true); }
-    }, 1000);
+    })();
   }
   renderMoves();
   setMovesEnabled(yourTurn);
