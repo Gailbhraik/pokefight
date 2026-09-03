@@ -146,6 +146,23 @@
     flex-direction:column; gap:18px; text-align:center;
   }
   .msg { font-size:.8em; color:#ffdd55; }
+  /* ============ ÉQUIPES ============ */
+  .mode-row { display:flex; gap:10px; justify-content:center; margin-bottom:18px; }
+  .mode-btn { padding:10px 22px; border-radius:12px; border:2px solid rgba(255,255,255,.25); background:rgba(255,255,255,.08); color:#fff; font-weight:bold; cursor:pointer; font-size:1em; }
+  .mode-btn.active { background:linear-gradient(#ffdd55,#ffaa00); color:#3a2c00; border-color:#ffdd55; }
+  #teamPanel { margin-top:14px; padding:14px 16px; border:1px solid rgba(255,255,255,.18); border-radius:14px; background:rgba(255,255,255,.06); }
+  .team-slots { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:10px; margin:10px 0; }
+  .team-slot { display:flex; align-items:center; gap:8px; padding:6px 8px; background:rgba(255,255,255,.1); border-radius:10px; position:relative; }
+  .team-slot img { width:44px; height:44px; image-rendering:pixelated; }
+  .ts-info { font-size:.85em; line-height:1.35; }
+  .slot-rm { position:absolute; top:4px; right:6px; background:none; border:none; color:#ff9999; cursor:pointer; font-size:.95em; }
+  #teamChooser { position:absolute; inset:0; display:none; align-items:center; justify-content:center; flex-direction:column; gap:12px; background:rgba(0,0,0,.72); z-index:6; }
+  #teamChooserList { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; max-width:90%; }
+  .team-choice { display:flex; flex-direction:column; align-items:center; gap:2px; padding:8px 10px; border-radius:12px; border:2px solid rgba(255,255,255,.3); background:rgba(255,255,255,.1); color:#fff; cursor:pointer; min-width:92px; }
+  .team-choice img { width:52px; height:52px; image-rendering:pixelated; }
+  .team-choice:disabled { opacity:.35; cursor:default; }
+  .tc-hp { width:80px; height:6px; background:#333; border-radius:3px; overflow:hidden; }
+  .tc-hp span { display:block; height:100%; background:#4ade4a; }
 </style>
 </head>
 <body>
@@ -155,19 +172,34 @@
 <div class="screen">
   <!-- ============ SÉLECTION ============ -->
   <div id="select">
+    <div class="mode-row">
+      <button class="mode-btn active" id="modeSolo">1 vs 1</button>
+      <button class="mode-btn" id="modeTeam">⚔️ Combat d'équipe</button>
+    </div>
     <div class="pick-zone">
       <div class="pick-box">
         <h3>🧢 Ton Pokémon</h3>
         <input type="text" id="pick1" placeholder="Nom (ex : Pikachu, Dracaufeu, Mewtwo...)" list="names">
         <div id="prev1"><p style="opacity:.6;margin-top:14px">En attente de choix...</p></div>
       </div>
-      <div class="pick-box">
+      <div class="pick-box" id="oppBox">
         <h3>🤖 Adversaire</h3>
         <input type="text" id="pick2" placeholder="Nom en français (ou vide = aléatoire)" list="names">
         <div id="prev2"><p style="opacity:.6;margin-top:14px">En attente de choix...</p></div>
       </div>
     </div>
     <datalist id="names"></datalist>
+
+    <div id="teamPanel" style="display:none">
+      <h3>👥 Ton équipe (max 6)</h3>
+      <div class="team-slots" id="teamSlots"></div>
+      <div class="actions" style="justify-content:flex-start;margin:8px 0 0">
+        <button class="btn btn-small" id="addToTeam" disabled>➕ Ajouter à l'équipe</button>
+        <button class="btn btn-gray btn-small" id="randTeam">🎲 Remplir aléatoirement</button>
+        <button class="btn btn-gray btn-small" id="clearTeam">🗑 Vider</button>
+      </div>
+      <p class="hint">💡 Chaque Pokémon garde son niveau, ses stats et ses attaques personnalisés. L'adversaire reçoit une équipe aléatoire au même niveau.</p>
+    </div>
 
     <!-- ============ PERSONNALISATION ============ -->
     <div class="customize" id="customizer">
@@ -232,10 +264,16 @@
       </div>
       <div class="fx-layer" id="fxLayer"></div>
       <div id="result"><div id="resultText"></div><button class="btn" id="againBtn">🔄 Revanche</button></div>
+      <div id="teamChooser">
+        <div id="teamChooserTitle" style="font-size:1.3em;font-weight:bold;text-shadow:0 0 12px #000">Choisis ton prochain Pokémon</div>
+        <div id="teamChooserList"></div>
+        <button class="btn btn-gray" id="teamChooserCancel">✕ Annuler</button>
+      </div>
     </div>
     <div class="log" id="log"></div>
     <div class="moves" id="moves"></div>
     <div class="actions" style="margin-top:12px">
+      <button class="btn btn-gray" id="switchBtn" style="display:none">🔄 Changer</button>
       <button class="btn btn-gray" id="fleeBtn">🏃 Fuir</button>
     </div>
   </div>
@@ -285,6 +323,7 @@ let allNames = [];
 let fighter1 = null, fighter2 = null;
 let you, foe, yourTurn = true, gameOver = false;
 let pickToken = 0;
+let teamMode = false, myTeam = [], foeTeam = [], pendingSwitch = false;
 
 const FR_NAMES = {"bulbasaur":"Bulbizarre","ivysaur":"Herbizarre","venusaur":"Florizarre","charmander":"Salamèche","charmeleon":"Reptincel","charizard":"Dracaufeu","squirtle":"Carapuce","wartortle":"Carabaffe","blastoise":"Tortank","caterpie":"Chenipan","metapod":"Chrysacier","butterfree":"Papilusion","weedle":"Aspicot","kakuna":"Coconfort","beedrill":"Dardargnan","pidgey":"Roucool","pidgeotto":"Roucoups","pidgeot":"Roucarnage","rattata":"Rattata","raticate":"Rattatac","spearow":"Piafabec","fearow":"Rapasdepic","ekans":"Abo","arbok":"Arbok","pikachu":"Pikachu","raichu":"Raichu","sandshrew":"Sabelette","sandslash":"Sablaireau","nidoran-f":"Nidoran♀","nidorina":"Nidorina","nidoqueen":"Nidoqueen","nidoran-m":"Nidoran♂","nidorino":"Nidorino","nidoking":"Nidoking","clefairy":"Mélofée","clefable":"Mélodelfe","vulpix":"Goupix","ninetales":"Feunard","jigglypuff":"Rondoudou","wigglytuff":"Grodoudou","zubat":"Nosferapti","golbat":"Nosferalto","oddish":"Mystherbe","gloom":"Ortide","vileplume":"Rafflesia","paras":"Paras","parasect":"Parasect","venonat":"Mimitoss","venomoth":"Aéromite","diglett":"Taupiqueur","dugtrio":"Triopikeur","meowth":"Miaouss","persian":"Persian","psyduck":"Psykokwak","golduck":"Akwakwak","mankey":"Férosinge","primeape":"Colossinge","growlithe":"Caninos","arcanine":"Arcanin","poliwag":"Ptitard","poliwhirl":"Têtarte","poliwrath":"Tartard","abra":"Abra","kadabra":"Kadabra","alakazam":"Alakazam","machop":"Machoc","machoke":"Machopeur","machamp":"Mackogneur","bellsprout":"Chétiflor","weepinbell":"Boustiflor","victreebel":"Empiflor","tentacool":"Tentacool","tentacruel":"Tentacruel","geodude":"Racaillou","graveler":"Gravalanch","golem":"Grolem","ponyta":"Ponyta","rapidash":"Galopa","slowpoke":"Ramoloss","slowbro":"Flagadoss","magnemite":"Magnéti","magneton":"Magnéton","farfetchd":"Canarticho","doduo":"Doduo","dodrio":"Dodrio","seel":"Otaria","dewgong":"Lamantine","grimer":"Tadmorv","muk":"Grotadmorv","shellder":"Kokiyas","cloyster":"Crustabri","gastly":"Fantominus","haunter":"Spectrum","gengar":"Ectoplasma","onix":"Onix","drowzee":"Soporifik","hypno":"Hypnomade","krabby":"Krabby","kingler":"Krabboss","voltorb":"Voltorbe","electrode":"Électrode","exeggcute":"Noeunoeuf","exeggutor":"Noadkoko","cubone":"Osselait","marowak":"Ossatueur","hitmonlee":"Kicklee","hitmonchan":"Tygnon","lickitung":"Excelangue","koffing":"Smogo","weezing":"Smogogo","rhyhorn":"Rhinocorne","rhydon":"Rhinoféros","chansey":"Leveinard","tangela":"Saquedeneu","kangaskhan":"Kangourex","horsea":"Hypotrempe","seadra":"Hypocéan","goldeen":"Poissirène","seaking":"Poissoroy","staryu":"Stari","starmie":"Staross","mr-mime":"M. Mime","scyther":"Insécateur","jynx":"Lippoutou","electabuzz":"Élektek","magmar":"Magmar","pinsir":"Scarabrute","tauros":"Tauros","magikarp":"Magicarpe","gyarados":"Léviator","lapras":"Lokhlass","ditto":"Métamorph","eevee":"Évoli","vaporeon":"Aquali","jolteon":"Voltali","flareon":"Pyroli","porygon":"Porygon","omanyte":"Amonita","omastar":"Amonistar","kabuto":"Kabuto","kabutops":"Kabutops","aerodactyl":"Ptéra","snorlax":"Ronflex","articuno":"Artikodin","zapdos":"Électhor","moltres":"Sulfura","dratini":"Minidraco","dragonair":"Draco","dragonite":"Dracolosse","mewtwo":"Mewtwo","mew":"Mew","chikorita":"Germignon","bayleef":"Macronium","meganium":"Méganium","cyndaquil":"Héricendre","quilava":"Feurisson","typhlosion":"Typhlosion","totodile":"Kaiminus","croconaw":"Crocrodil","feraligatr":"Aligatueur","sentret":"Fouinette","furret":"Fouinar","hoothoot":"Hoothoot","noctowl":"Noarfang","ledyba":"Coxy","ledian":"Coxyclaque","spinarak":"Mimigal","ariados":"Migalos","crobat":"Nostenfer","chinchou":"Loupio","lanturn":"Lanturn","pichu":"Pichu","cleffa":"Mélo","igglybuff":"Toudoudou","togepi":"Togepi","togetic":"Togetic","natu":"Natu","xatu":"Xatu","mareep":"Wattouat","flaaffy":"Lainergie","ampharos":"Pharamp","bellossom":"Joliflor","marill":"Marill","azumarill":"Azumarill","sudowoodo":"Simularbre","politoed":"Tarpaud","hoppip":"Granivol","skiploom":"Floravol","jumpluff":"Cotovol","aipom":"Capumain","sunkern":"Tournegrin","sunflora":"Héliatronc","yanma":"Yanma","wooper":"Axoloto","quagsire":"Maraiste","espeon":"Mentali","umbreon":"Noctali","murkrow":"Cornèbre","slowking":"Roigada","misdreavus":"Feuforêve","unown":"Zarbi","wobbuffet":"Qulbutoké","girafarig":"Girafarig","pineco":"Pomdepik","forretress":"Foretress","dunsparce":"Insolourdo","gligar":"Scorplane","steelix":"Steelix","snubbull":"Snubbull","granbull":"Granbull","qwilfish":"Qwilfish","scizor":"Cizayox","shuckle":"Caratroc","heracross":"Scarhino","sneasel":"Farfuret","teddiursa":"Teddiursa","ursaring":"Ursaring","slugma":"Limagma","magcargo":"Volcaropod","swinub":"Marcacrin","piloswine":"Cochignon","corsola":"Corayon","remoraid":"Rémoraid","octillery":"Octillery","delibird":"Cadoizo","mantine":"Démanta","skarmory":"Airmure","houndour":"Malosse","houndoom":"Démolosse","kingdra":"Hyporoi","phanpy":"Phanpy","donphan":"Donphan","porygon2":"Porygon2","stantler":"Cerfrousse","smeargle":"Queulorior","tyrogue":"Debugant","hitmontop":"Kapoera","smoochum":"Lippouti","elekid":"Élekid","magby":"Magby","miltank":"Écrémeuh","blissey":"Leuphorie","raikou":"Raikou","entei":"Entei","suicune":"Suicune","larvitar":"Embrylex","pupitar":"Ymphect","tyranitar":"Tyranocif","lugia":"Lugia","ho-oh":"Ho-Oh","celebi":"Celebi","treecko":"Arcko","grovyle":"Massko","sceptile":"Jungko","torchic":"Poussifeu","combusken":"Galifeu","blaziken":"Braségali","mudkip":"Gobou","marshtomp":"Flobio","swampert":"Laggron","poochyena":"Medhyèna","mightyena":"Grahyèna","zigzagoon":"Zigzaton","linoone":"Linéon","wurmple":"Chenipotte","silcoon":"Armulys","beautifly":"Charmillon","cascoon":"Blindalys","dustox":"Papinox","lotad":"Nénupiot","lombre":"Lombre","ludicolo":"Ludicolo","seedot":"Grainipiot","nuzleaf":"Pifeuil","shiftry":"Tengalice","taillow":"Nirondelle","swellow":"Hélédelle","wingull":"Goélise","pelipper":"Bekipan","ralts":"Tarsal","kirlia":"Kirlia","gardevoir":"Gardevoir","surskit":"Arakdo","masquerain":"Maskadra","shroomish":"Balignon","breloom":"Chapignon","slakoth":"Parecool","vigoroth":"Vigoroth","slaking":"Monaflèmit","nincada":"Ningale","ninjask":"Ninjask","shedinja":"Munja","whismur":"Chuchmur","loudred":"Ramboum","exploud":"Brouhabam","makuhita":"Makuhita","hariyama":"Hariyama","azurill":"Azurill","nosepass":"Tarinor","skitty":"Skitty","delcatty":"Delcatty","sableye":"Ténéfix","mawile":"Mysdibule","aron":"Galekid","lairon":"Galegon","aggron":"Galeking","meditite":"Méditikka","medicham":"Charmina","electrike":"Dynavolt","manectric":"Élecsprint","plusle":"Posipi","minun":"Négapi","volbeat":"Muciole","illumise":"Lumivole","roselia":"Rosélia","gulpin":"Gloupti","swalot":"Avaltout","carvanha":"Carvanha","sharpedo":"Sharpedo","wailmer":"Wailmer","wailord":"Wailord","numel":"Chamallot","camerupt":"Camérupt","torkoal":"Chartor","spoink":"Spoink","grumpig":"Groret","spinda":"Spinda","trapinch":"Kraknoix","vibrava":"Vibraninf","flygon":"Libégon","cacnea":"Cacnea","cacturne":"Cacturne","swablu":"Tylton","altaria":"Altaria","zangoose":"Mangriff","seviper":"Séviper","lunatone":"Séléroc","solrock":"Solaroc","barboach":"Barloche","whiscash":"Barbicha","corphish":"Écrapince","crawdaunt":"Colhomard","baltoy":"Balbuto","claydol":"Kaorine","lileep":"Lilia","cradily":"Vacilys","anorith":"Anorith","armaldo":"Armaldo","feebas":"Barpau","milotic":"Milobellus","castform":"Morphéo","kecleon":"Kecleon","shuppet":"Polichombr","banette":"Branette","duskull":"Skelénox","dusclops":"Téraclope","tropius":"Tropius","chimecho":"Éoko","absol":"Absol","wynaut":"Okéoké","snorunt":"Stalgamin","glalie":"Oniglali","spheal":"Obalie","sealeo":"Phogleur","walrein":"Kaimorse","clamperl":"Coquiperl","huntail":"Serpang","gorebyss":"Rosabyss","relicanth":"Relicanth","luvdisc":"Lovdisc","bagon":"Draby","shelgon":"Drackhaus","salamence":"Drattak","beldum":"Terhal","metang":"Métang","metagross":"Métalosse","regirock":"Regirock","regice":"Regice","registeel":"Registeel","latias":"Latias","latios":"Latios","kyogre":"Kyogre","groudon":"Groudon","rayquaza":"Rayquaza","jirachi":"Jirachi","deoxys":"Deoxys","turtwig":"Tortipouss","grotle":"Boskara","torterra":"Torterra","chimchar":"Ouisticram","monferno":"Chimpenfeu","infernape":"Simiabraz","piplup":"Tiplouf","prinplup":"Prinplouf","empoleon":"Pingoléon","starly":"Étourmi","staravia":"Étourvol","staraptor":"Étouraptor","bidoof":"Keunotor","bibarel":"Castorno","kricketot":"Crikzik","kricketune":"Mélokrik","shinx":"Lixy","luxio":"Luxio","luxray":"Luxray","budew":"Rozbouton","roserade":"Roserade","cranidos":"Kranidos","rampardos":"Charkos","shieldon":"Dinoclier","bastiodon":"Bastiodon","burmy":"Cheniti","wormadam":"Cheniselle","mothim":"Papilord","combee":"Apitrini","vespiquen":"Apireine","pachirisu":"Pachirisu","buizel":"Mustébouée","floatzel":"Mustéflott","cherubi":"Ceribou","cherrim":"Ceriflor","shellos":"Sancoki","gastrodon":"Tritosor","ambipom":"Capidextre","drifloon":"Baudrive","drifblim":"Grodrive","buneary":"Laporeille","lopunny":"Lockpin","mismagius":"Magirêve","honchkrow":"Corboss","glameow":"Chaglam","purugly":"Chaffreux","chingling":"Korillon","stunky":"Moufouette","skuntank":"Moufflair","bronzor":"Archéomire","bronzong":"Archéodong","bonsly":"Manzaï","mime-jr":"Mime Jr.","happiny":"Ptiravi","chatot":"Pijako","spiritomb":"Spiritomb","gible":"Griknot","gabite":"Carmache","garchomp":"Carchacrok","munchlax":"Goinfrex","riolu":"Riolu","lucario":"Lucario","hippopotas":"Hippopotas","hippowdon":"Hippodocus","skorupi":"Rapion","drapion":"Drascore","croagunk":"Cradopaud","toxicroak":"Coatox","carnivine":"Vortente","finneon":"Écayon","lumineon":"Luminéon","mantyke":"Babimanta","snover":"Blizzi","abomasnow":"Blizzaroi","weavile":"Dimoret","magnezone":"Magnézone","lickilicky":"Coudlangue","rhyperior":"Rhinastoc","tangrowth":"Bouldeneu","electivire":"Élekable","magmortar":"Maganon","togekiss":"Togekiss","yanmega":"Yanmega","leafeon":"Phyllali","glaceon":"Givrali","gliscor":"Scorvol","mamoswine":"Mammochon","porygon-z":"Porygon-Z","gallade":"Gallame","probopass":"Tarinorme","dusknoir":"Noctunoir","froslass":"Momartik","rotom":"Motisma","uxie":"Créhelf","mesprit":"Créfollet","azelf":"Créfadet","dialga":"Dialga","palkia":"Palkia","heatran":"Heatran","regigigas":"Regigigas","giratina":"Giratina","cresselia":"Cresselia","phione":"Phione","manaphy":"Manaphy","darkrai":"Darkrai","shaymin":"Shaymin","arceus":"Arceus","victini":"Victini","snivy":"Vipélierre","servine":"Lianaja","serperior":"Majaspic","tepig":"Gruikui","pignite":"Grotichon","emboar":"Roitiflam","oshawott":"Moustillon","dewott":"Mateloutre","samurott":"Clamiral","patrat":"Ratentif","watchog":"Miradar","lillipup":"Ponchiot","herdier":"Ponchien","stoutland":"Mastouffe","purrloin":"Chacripan","liepard":"Léopardus","pansage":"Feuillajou","simisage":"Feuiloutan","pansear":"Flamajou","simisear":"Flamoutan","panpour":"Flotajou","simipour":"Flotoutan","munna":"Munna","musharna":"Mushana","pidove":"Poichigeon","tranquill":"Colombeau","unfezant":"Déflaisan","blitzle":"Zébibron","zebstrika":"Zéblitz","roggenrola":"Nodulithe","boldore":"Géolithe","gigalith":"Gigalithe","woobat":"Chovsourir","swoobat":"Rhinolove","drilbur":"Rototaupe","excadrill":"Minotaupe","audino":"Nanméouïe","timburr":"Charpenti","gurdurr":"Ouvrifier","conkeldurr":"Bétochef","tympole":"Tritonde","palpitoad":"Batracné","seismitoad":"Crapustule","throh":"Judokrak","sawk":"Karaclée","sewaddle":"Larveyette","swadloon":"Couverdure","leavanny":"Manternel","venipede":"Venipatte","whirlipede":"Scobolide","scolipede":"Brutapode","cottonee":"Doudouvet","whimsicott":"Farfaduvet","petilil":"Chlorobule","lilligant":"Fragilady","basculin":"Bargantua","sandile":"Mascaïman","krokorok":"Escroco","krookodile":"Crocorible","darumaka":"Darumarond","darmanitan":"Darumacho","maractus":"Maracachi","dwebble":"Crabicoque","crustle":"Crabaraque","scraggy":"Baggiguane","scrafty":"Baggaïd","sigilyph":"Cryptéro","yamask":"Tutafeh","cofagrigus":"Tutankafer","tirtouga":"Carapagos","carracosta":"Mégapagos","archen":"Arkéapti","archeops":"Aéroptéryx","trubbish":"Miamiasme","garbodor":"Miasmax","zorua":"Zorua","zoroark":"Zoroark","minccino":"Chinchidou","cinccino":"Pashmilla","gothita":"Scrutella","gothorita":"Mesmérella","gothitelle":"Sidérella","solosis":"Nucléos","duosion":"Méios","reuniclus":"Symbios","ducklett":"Couaneton","swanna":"Lakmécygne","vanillite":"Sorbébé","vanillish":"Sorboul","vanilluxe":"Sorbouboul","deerling":"Vivaldaim","sawsbuck":"Haydaim","emolga":"Emolga","karrablast":"Carabing","escavalier":"Lançargot","foongus":"Trompignon","amoonguss":"Gaulet","frillish":"Viskuse","jellicent":"Moyade","alomomola":"Mamanbo","joltik":"Statitik","galvantula":"Mygavolt","ferroseed":"Grindur","ferrothorn":"Noacier","klink":"Tic","klang":"Clic","klinklang":"Cliticlic","tynamo":"Anchwatt","eelektrik":"Lampéroie","eelektross":"Ohmassacre","elgyem":"Lewsor","beheeyem":"Neitram","litwick":"Funécire","lampent":"Mélancolux","chandelure":"Lugulabre","axew":"Coupenotte","fraxure":"Incisache","haxorus":"Tranchodon","cubchoo":"Polarhume","beartic":"Polagriffe","cryogonal":"Hexagel","shelmet":"Escargaume","accelgor":"Limaspeed","stunfisk":"Limonde","mienfoo":"Kungfouine","mienshao":"Shaofouine","druddigon":"Drakkarmin","golett":"Gringolem","golurk":"Golemastoc","pawniard":"Scalpion","bisharp":"Scalproie","bouffalant":"Frison","rufflet":"Furaiglon","braviary":"Gueriaigle","vullaby":"Vostourno","mandibuzz":"Vaututrice","heatmor":"Aflamanoir","durant":"Fermite","deino":"Solochi","zweilous":"Diamat","hydreigon":"Trioxhydre","larvesta":"Pyronille","volcarona":"Pyrax","cobalion":"Cobaltium","terrakion":"Terrakium","virizion":"Viridium","tornadus":"Boréas","thundurus":"Fulguris","reshiram":"Reshiram","zekrom":"Zekrom","landorus":"Démétéros","kyurem":"Kyurem","keldeo":"Keldeo","meloetta":"Meloetta","genesect":"Genesect","chespin":"Marisson","quilladin":"Boguérisse","chesnaught":"Blindépique","fennekin":"Feunnec","braixen":"Roussil","delphox":"Goupelin","froakie":"Grenousse","frogadier":"Croâporal","greninja":"Amphinobi","bunnelby":"Sapereau","diggersby":"Excavarenne","fletchling":"Passerouge","fletchinder":"Braisillon","talonflame":"Flambusard","scatterbug":"Lépidonille","spewpa":"Pérégrain","vivillon":"Prismillon","litleo":"Hélionceau","pyroar":"Némélios","flabebe":"Flabébé","floette":"Floette","florges":"Florges","skiddo":"Cabriolaine","gogoat":"Chevroum","pancham":"Pandespiègle","pangoro":"Pandarbare","furfrou":"Couafarel","espurr":"Psystigri","meowstic":"Mistigrix","honedge":"Monorpale","doublade":"Dimoclès","aegislash":"Exagide","spritzee":"Fluvetin","aromatisse":"Cocotine","swirlix":"Sucroquin","slurpuff":"Cupcanaille","inkay":"Sepiatop","malamar":"Sepiatroce","binacle":"Opermine","barbaracle":"Golgopathe","skrelp":"Venalgue","dragalge":"Kravarech","clauncher":"Flingouste","clawitzer":"Gamblast","helioptile":"Galvaran","heliolisk":"Iguolta","tyrunt":"Ptyranidur","tyrantrum":"Rexillius","amaura":"Amagara","aurorus":"Dragmara","sylveon":"Nymphali","hawlucha":"Brutalibré","dedenne":"Dedenne","carbink":"Strassie","goomy":"Mucuscule","sliggoo":"Colimucus","goodra":"Muplodocus","klefki":"Trousselin","phantump":"Brocélôme","trevenant":"Desséliande","pumpkaboo":"Pitrouille","gourgeist":"Banshitrouye","bergmite":"Grelaçon","avalugg":"Séracrawl","noibat":"Sonistrelle","noivern":"Bruyverne","xerneas":"Xerneas","yveltal":"Yveltal","zygarde":"Zygarde","diancie":"Diancie","hoopa":"Hoopa","volcanion":"Volcanion","rowlet":"Brindibou","dartrix":"Efflèche","decidueye":"Archéduc","litten":"Flamiaou","torracat":"Matoufeu","incineroar":"Félinferno","popplio":"Otaquin","brionne":"Otarlette","primarina":"Oratoria","pikipek":"Picassaut","trumbeak":"Piclairon","toucannon":"Bazoucan","yungoos":"Manglouton","gumshoos":"Argouste","grubbin":"Larvibule","charjabug":"Chrysapile","vikavolt":"Lucanon","crabrawler":"Crabagarre","crabominable":"Crabominable","oricorio":"Plumeline","cutiefly":"Bombydou","ribombee":"Rubombelle","rockruff":"Rocabot","lycanroc":"Lougaroc","wishiwashi":"Froussardine","mareanie":"Vorastérie","toxapex":"Prédastérie","mudbray":"Tiboudet","mudsdale":"Bourrinos","dewpider":"Araqua","araquanid":"Tarenbulle","fomantis":"Mimantis","lurantis":"Floramantis","morelull":"Spododo","shiinotic":"Lampignon","salandit":"Tritox","salazzle":"Malamandre","stufful":"Nounourson","bewear":"Chelours","bounsweet":"Croquine","steenee":"Candine","tsareena":"Sucreine","comfey":"Guérilande","oranguru":"Gouroutan","passimian":"Quartermac","wimpod":"Sovkipou","golisopod":"Sarmuraï","sandygast":"Bacabouh","palossand":"Trépassable","pyukumuku":"Concombaffe","type-null":"Type:0","silvally":"Silvallié","minior":"Météno","komala":"Dodoala","turtonator":"Boumata","togedemaru":"Togedemaru","mimikyu":"Mimiqui","bruxish":"Denticrisse","drampa":"Draïeul","dhelmise":"Sinistrail","jangmo-o":"Bébécaille","hakamo-o":"Écaïd","kommo-o":"Ékaïser","tapu-koko":"Tokorico","tapu-lele":"Tokopiyon","tapu-bulu":"Tokotoro","tapu-fini":"Tokopisco","cosmog":"Cosmog","cosmoem":"Cosmovum","solgaleo":"Solgaleo","lunala":"Lunala","nihilego":"Zéroïd","buzzwole":"Mouscoto","pheromosa":"Cancrelove","xurkitree":"Câblifère","celesteela":"Bamboiselle","kartana":"Katagami","guzzlord":"Engloutyran","necrozma":"Necrozma","magearna":"Magearna","marshadow":"Marshadow","poipole":"Vémini","naganadel":"Mandrillon","stakataka":"Ama-Ama","blacephalon":"Pierroteknik","zeraora":"Zeraora","meltan":"Meltan","melmetal":"Melmetal","grookey":"Ouistempo","thwackey":"Badabouin","rillaboom":"Gorythmic","scorbunny":"Flambino","raboot":"Lapyro","cinderace":"Pyrobut","sobble":"Larméléon","drizzile":"Arrozard","inteleon":"Lézargus","skwovet":"Rongourmand","greedent":"Rongrigou","rookidee":"Minisange","corvisquire":"Bleuseille","corviknight":"Corvaillus","blipbug":"Larvadar","dottler":"Coléodôme","orbeetle":"Astronelle","nickit":"Goupilou","thievul":"Roublenard","gossifleur":"Tournicoton","eldegoss":"Blancoton","wooloo":"Moumouton","dubwool":"Moumouflon","chewtle":"Khélocrok","drednaw":"Torgamord","yamper":"Voltoutou","boltund":"Fulgudog","rolycoly":"Charbi","carkol":"Wagomine","coalossal":"Monthracite","applin":"Verpom","flapple":"Pomdrapi","appletun":"Dratatin","silicobra":"Dunaja","sandaconda":"Dunaconda","cramorant":"Nigosier","arrokuda":"Embrochet","barraskewda":"Hastacuda","toxel":"Toxizap","toxtricity":"Salarsen","sizzlipede":"Grillepattes","centiskorch":"Scolocendre","clobbopus":"Poulpaf","grapploct":"Krakos","sinistea":"Théffroi","polteageist":"Polthégeist","hatenna":"Bibichut","hattrem":"Chapotus","hatterene":"Sorcilence","impidimp":"Grimalin","morgrem":"Fourbelin","grimmsnarl":"Angoliath","obstagoon":"Ixon","perrserker":"Berserkatt","cursola":"Corayôme","sirfetchd":"Palarticho","mr-rime":"M. Glaquette","runerigus":"Tutétékri","milcery":"Crèmy","alcremie":"Charmilly","falinks":"Hexadron","pincurchin":"Wattapik","snom":"Frissonille","frosmoth":"Beldeneige","stonjourner":"Dolman","eiscue":"Bekaglaçon","indeedee":"Wimessir","morpeko":"Morpeko","cufant":"Charibari","copperajah":"Pachyradjah","dracozolt":"Galvagon","arctozolt":"Galvagla","dracovish":"Hydragon","arctovish":"Hydragla","duraludon":"Duralugon","dreepy":"Fantyrm","drakloak":"Dispareptil","dragapult":"Lanssorien","zacian":"Zacian","zamazenta":"Zamazenta","eternatus":"Éthernatos","kubfu":"Wushours","urshifu":"Shifours","zarude":"Zarude","regieleki":"Regieleki","regidrago":"Regidrago","glastrier":"Blizzeval","spectrier":"Spectreval","calyrex":"Sylveroy","wyrdeer":"Cerbyllin","kleavor":"Hachécateur","ursaluna":"Ursaking","basculegion":"Paragruel","sneasler":"Farfurex","overqwil":"Qwilpik","enamorus":"Amovénus","sprigatito":"Poussacha","floragato":"Matourgeon","meowscarada":"Miascarade","fuecoco":"Chochodile","crocalor":"Crocogril","skeledirge":"Flâmigator","quaxly":"Coiffeton","quaxwell":"Canarbello","quaquaval":"Palmaval","lechonk":"Gourmelet","oinkologne":"Fragroin","tarountula":"Tissenboule","spidops":"Filentrappe","nymble":"Lilliterelle","lokix":"Gambex","pawmi":"Pohm","pawmo":"Pohmotte","pawmot":"Pohmarmotte","tandemaus":"Compagnol","maushold":"Famignol","fidough":"Pâtachiot","dachsbun":"Briochien","smoliv":"Olivini","dolliv":"Olivado","arboliva":"Arboliva","squawkabilly":"Tapatoès","nacli":"Selutin","naclstack":"Amassel","garganacl":"Gigansel","charcadet":"Charbambin","armarouge":"Carmadura","ceruledge":"Malvalame","tadbulb":"Têtampoule","bellibolt":"Ampibidou","wattrel":"Zapétrel","kilowattrel":"Fulgulairo","maschiff":"Grondogue","mabosstiff":"Dogrino","shroodle":"Gribouraigne","grafaiai":"Tag-Tag","bramblin":"Virovent","brambleghast":"Virevorreur","toedscool":"Terracool","toedscruel":"Terracruel","klawf":"Craparoi","capsakid":"Pimito","scovillain":"Scovilain","rellor":"Léboulérou","rabsca":"Bérasca","flittle":"Flotillon","espathra":"Cléopsytra","tinkatink":"Forgerette","tinkatuff":"Forgella","tinkaton":"Forgelina","wiglett":"Taupikeau","wugtrio":"Triopikeau","bombirdier":"Lestombaile","finizen":"Dofin","palafin":"Superdofin","varoom":"Vrombi","revavroom":"Vrombotor","cyclizar":"Motorizard","orthworm":"Ferdeter","glimmet":"Germéclat","glimmora":"Floréclat","greavard":"Toutombe","houndstone":"Tomberro","flamigo":"Flamenroule","cetoddle":"Piétacé","cetitan":"Balbalèze","veluza":"Délestin","dondozo":"Oyacata","tatsugiri":"Nigirigon","annihilape":"Courrousinge","clodsire":"Terraiste","farigiraf":"Farigiraf","dudunsparce":"Deusolourdo","kingambit":"Scalpereur","great-tusk":"Fort-Ivoire","scream-tail":"Hurle-Queue","brute-bonnet":"Fongus-Furie","flutter-mane":"Flotte-Mèche","slither-wing":"Rampe-Ailes","sandy-shocks":"Pelage-Sablé","iron-treads":"Roue-de-Fer","iron-bundle":"Hotte-de-Fer","iron-hands":"Paume-de-Fer","iron-jugulis":"Têtes-de-Fer","iron-moth":"Mite-de-Fer","iron-thorns":"Épine-de-Fer","frigibax":"Frigodo","arctibax":"Cryodo","baxcalibur":"Glaivodo","gimmighoul":"Mordudor","gholdengo":"Gromago","wo-chien":"Chongjian","chien-pao":"Baojian","ting-lu":"Dinglu","chi-yu":"Yuyu","roaring-moon":"Rugit-Lune","iron-valiant":"Garde-de-Fer","koraidon":"Koraidon","miraidon":"Miraidon","walking-wake":"Serpente-Eau","iron-leaves":"Vert-de-Fer","dipplin":"Pomdramour","poltchageist":"Poltchageist","sinistcha":"Théffroyable","okidogi":"Félicanis","munkidori":"Fortusimia","fezandipiti":"Favianos","ogerpon":"Ogerpon","archaludon":"Pondralugon","hydrapple":"Pomdorochi","gouging-fire":"Feu-Perçant","raging-bolt":"Ire-Foudre","iron-boulder":"Roc-de-Fer","iron-crown":"Chef-de-Fer","terapagos":"Terapagos","pecharunt":"Pêchaminus"};
 const FR_TO_SLUG = {};
@@ -418,7 +457,10 @@ function previewHTML(f){
 }
 
 function checkReady(){
-  document.getElementById('startBtn').disabled = !(fighter1 && fighter2);
+  const ok = teamMode ? myTeam.length > 0 : !!(fighter1 && fighter2);
+  document.getElementById('startBtn').disabled = !ok;
+  const add = document.getElementById('addToTeam');
+  if(add) add.disabled = !(fighter1 && myTeam.length < 6);
 }
 
 // ============ PERSONNALISATION ============
@@ -708,6 +750,33 @@ function checkEnd(){
     document.getElementById('result').style.display = 'flex';
     document.getElementById('resultText').innerHTML = html;
   };
+  if(teamMode){
+    if(foe.hp <= 0){
+      const next = foeTeam.find(f => f.hp > 0);
+      if(!next){
+        gameOver = true; setMovesEnabled(false);
+        setTimeout(() => show(`🏆 <span style="color:gold">VICTOIRE !</span><br><span class="msg">Toute l'équipe adverse est K.O. !</span>`), 900);
+      } else {
+        yourTurn = false; setMovesEnabled(false);
+        setTimeout(() => {
+          foe = next; updateActiveUI();
+          log(`L'adversaire envoie <b>${foe.name}</b> !`);
+          yourTurn = true; setMovesEnabled(true);
+        }, 900);
+      }
+      return true;
+    }
+    if(you.hp <= 0){
+      if(!myTeam.some(f => f.hp > 0)){
+        gameOver = true; setMovesEnabled(false);
+        setTimeout(() => show(`💀 <span style="color:#ff8080">DÉFAITE...</span><br><span class="msg">Tous tes Pokémon sont K.O. !</span>`), 900);
+      } else {
+        setTimeout(showTeamChooser, 900);
+      }
+      return true;
+    }
+    return false;
+  }
   if(foe.hp <= 0){
     gameOver = true;
     setMovesEnabled(false);
@@ -739,6 +808,52 @@ async function playerAttack(i){
   setMovesEnabled(true);
 }
 
+function updateActiveUI(){
+  document.getElementById('youName').textContent = `${you.name} N.${you.level}`;
+  document.getElementById('foeName').textContent = `${foe.name} N.${foe.level}`;
+  document.getElementById('youSprite').src = you.backSprite || you.sprite;
+  document.getElementById('foeSprite').src = foe.sprite;
+  for(const id of ['youSprite','foeSprite']) document.getElementById(id).className = 'battle-sprite';
+  refreshBars();
+  renderMoves();
+  renderTeamSwitchBtn();
+}
+
+function renderTeamSwitchBtn(){
+  document.getElementById('switchBtn').style.display =
+    (teamMode && myTeam.filter(f => f.hp > 0).length > 1) ? 'inline-block' : 'none';
+}
+
+function beginBattleUI(){
+  document.getElementById('select').style.display = 'none';
+  document.getElementById('battle').style.display = 'block';
+  document.getElementById('result').style.display = 'none';
+  document.getElementById('teamChooser').style.display = 'none';
+  pendingSwitch = false;
+  updateActiveUI();
+  document.getElementById('fxLayer').innerHTML = '';
+}
+
+function bestFoeMove(){
+  return foe.moves.map(m => ({m, e: typeEffect(m.type, you.types)})).sort((a,b)=>b.e-a.e)[0].m;
+}
+
+function firstMoveFlow(){
+  if(you.speed >= foe.speed){
+    log(`Ton ${you.name} est plus rapide, il attaque en premier !`);
+    yourTurn = true;
+  } else {
+    log(`Le ${foe.name} adverse est plus rapide !`);
+    yourTurn = false;
+    (async () => {
+      await sleep(500);
+      await doAttack(foe, you, bestFoeMove(), `Le ${foe.name} adverse`, `ton ${you.name}`, 'foe', 'you');
+      if(!checkEnd()){ yourTurn = true; setMovesEnabled(true); }
+    })();
+  }
+  setMovesEnabled(yourTurn);
+}
+
 function startBattle(){
   // Applique la personnalisation du joueur si le panneau est ouvert
   if(customizer.style.display === 'block' && fighter1){
@@ -753,32 +868,109 @@ function startBattle(){
   }
   you = fighter1; foe = fighter2;
   gameOver = false; yourTurn = true;
-  document.getElementById('select').style.display = 'none';
-  document.getElementById('battle').style.display = 'block';
-  document.getElementById('result').style.display = 'none';
-  document.getElementById('youName').textContent = `${you.name} N.${you.level}`;
-  document.getElementById('foeName').textContent = `${foe.name} N.${foe.level}`;
-  document.getElementById('youSprite').src = you.backSprite || you.sprite;
-  document.getElementById('foeSprite').src = foe.sprite;
-  for(const id of ['youSprite','foeSprite']) document.getElementById(id).className = 'battle-sprite';
-  document.getElementById('fxLayer').innerHTML = '';
-  refreshBars();
+  beginBattleUI();
   document.getElementById('log').innerHTML = '';
   log(`⚡ Le combat commence : <b>${you.name} N.${you.level}</b> vs <b>${foe.name} N.${foe.level}</b> !`);
-  if(you.speed >= foe.speed){
-    log(`Ton ${you.name} est plus rapide, il attaque en premier !`);
+  firstMoveFlow();
+}
+
+// ============ ÉQUIPES ============
+function snapshotFighter(f){
+  return {
+    name: f.name, types: [...f.types], sprite: f.sprite, backSprite: f.backSprite,
+    base: {...f.base}, level: f.level,
+    maxHP: f.maxHP, hp: f.maxHP, atk: f.atk, def: f.def, spa: f.spa, spd: f.spd, speed: f.speed,
+    moves: f.moves.map(m => ({...m})), learnset: f.learnset
+  };
+}
+
+function renderTeamSlots(){
+  const el = document.getElementById('teamSlots');
+  if(!myTeam.length){
+    el.innerHTML = '<p class="hint" style="grid-column:1/-1">Ton équipe est vide — choisis un Pokémon puis clique sur « Ajouter à l\'équipe » (ou remplis aléatoirement).</p>';
   } else {
-    log(`Le ${foe.name} adverse est plus rapide !`);
-    yourTurn = false;
-    (async () => {
-      await sleep(500);
-      const best = foe.moves[Math.floor(Math.random()*foe.moves.length)];
-      await doAttack(foe, you, best, `Le ${foe.name} adverse`, `ton ${you.name}`, 'foe', 'you');
-      if(!checkEnd()){ yourTurn = true; setMovesEnabled(true); }
-    })();
+    el.innerHTML = myTeam.map((f, i) => `
+      <div class="team-slot">
+        <img src="${f.sprite}" alt="${f.name}">
+        <div class="ts-info"><b>${f.name}</b> <span>N.${f.level}</span><br><small>${f.types.map(t=>badge(t)).join('')} · PV ${f.maxHP}</small></div>
+        <button class="slot-rm" data-i="${i}" title="Retirer">✕</button>
+      </div>`).join('');
+    el.querySelectorAll('.slot-rm').forEach(b => b.onclick = () => { myTeam.splice(+b.dataset.i, 1); renderTeamSlots(); });
   }
-  renderMoves();
-  setMovesEnabled(yourTurn);
+  checkReady();
+}
+
+async function randomTeamFighters(level){
+  const picks = [];
+  while(picks.length < 6){
+    const n = allNames[Math.floor(Math.random()*151)]; // Gen 1
+    if(!picks.includes(n)) picks.push(n);
+  }
+  const datas = await Promise.all(picks.map(p => fetchPokemon(p)));
+  const team = datas.map(d => {
+    const f = buildFighter(d, level);
+    f.rawMoves = d.moves.map(m => m.move.url);
+    return f;
+  });
+  await Promise.all(team.map(f => autoMoves(f)));
+  return team;
+}
+
+async function startTeamBattle(){
+  const btn = document.getElementById('startBtn');
+  btn.disabled = true; btn.textContent = '⏳ Préparation...';
+  try{
+    const lvl = myTeam[0].level;
+    myTeam.forEach(f => { f.hp = f.maxHP; });
+    foeTeam = await randomTeamFighters(lvl);
+    you = myTeam[0]; foe = foeTeam[0];
+    gameOver = false; yourTurn = true;
+    beginBattleUI();
+    document.getElementById('log').innerHTML = '';
+    log(`⚔️ Combat d'équipe : <b>${myTeam.length}</b> Pokémon vs <b>${foeTeam.length}</b> !`);
+    log(`Tu envoies <b>${you.name} N.${you.level}</b> !`);
+    log(`L'adversaire envoie <b>${foe.name} N.${foe.level}</b> !`);
+    firstMoveFlow();
+  } finally {
+    btn.textContent = '▶ Lancer le combat';
+    checkReady();
+  }
+}
+
+function showTeamChooser(){
+  const box = document.getElementById('teamChooserList');
+  document.getElementById('teamChooserTitle').textContent = pendingSwitch ? 'Qui envoies-tu au combat ?' : 'Choisis ton prochain Pokémon';
+  document.getElementById('teamChooserCancel').style.display = pendingSwitch ? 'inline-block' : 'none';
+  box.innerHTML = myTeam.map((f, i) => {
+    const dead = f.hp <= 0, cur = f === you;
+    const pct = Math.max(0, 100 * f.hp / f.maxHP);
+    return `<button class="team-choice" data-i="${i}" ${dead || cur ? 'disabled' : ''}>
+      <img src="${f.sprite}" alt="${f.name}"><span>${f.name}</span>
+      <small>${dead ? 'K.O.' : f.hp + ' / ' + f.maxHP}</small>
+      <span class="tc-hp"><span style="width:${pct}%"></span></span>
+    </button>`;
+  }).join('');
+  box.querySelectorAll('.team-choice').forEach(b => b.onclick = () => chooseMember(+b.dataset.i));
+  document.getElementById('teamChooser').style.display = 'flex';
+}
+
+async function chooseMember(i){
+  const f = myTeam[i];
+  document.getElementById('teamChooser').style.display = 'none';
+  if(!f || f.hp <= 0) return;
+  const wasSwitch = pendingSwitch;
+  pendingSwitch = false;
+  you = f;
+  updateActiveUI();
+  log(`Tu envoies <b>${f.name}</b> !`);
+  if(wasSwitch && !gameOver){
+    // changer de Pokémon consomme le tour : l'adversaire attaque
+    await sleep(400);
+    await doAttack(foe, you, bestFoeMove(), `Le ${foe.name} adverse`, `ton ${you.name}`, 'foe', 'you');
+    if(!checkEnd()){ yourTurn = true; setMovesEnabled(true); }
+  } else if(!gameOver){
+    yourTurn = true; setMovesEnabled(true);
+  }
 }
 
 function resetToSelect(){
@@ -821,10 +1013,10 @@ for(let i = 0; i < 4; i++){
   document.getElementById('mv'+i).addEventListener('change', () => { if(fighter1) refreshPreview1(); });
 }
 document.getElementById('randMoves').onclick = () => { if(fighter1) randomMovesFromSelects(fighter1); };
-document.getElementById('startBtn').onclick = startBattle;
+document.getElementById('startBtn').onclick = () => { if(teamMode) startTeamBattle(); else startBattle(); };
 document.getElementById('againBtn').onclick = () => {
-  you.hp = you.maxHP; foe.hp = foe.maxHP;
-  startBattle();
+  if(teamMode){ myTeam.forEach(f => f.hp = f.maxHP); foeTeam.forEach(f => f.hp = f.maxHP); startTeamBattle(); }
+  else { you.hp = you.maxHP; foe.hp = foe.maxHP; startBattle(); }
 };
 document.getElementById('fleeBtn').onclick = () => {
   log('Tu prends la fuite ! 🏃', '#ffdd55');
@@ -835,17 +1027,69 @@ document.getElementById('randomBtn').onclick = async () => {
   b.disabled = true; b.textContent = '⏳ Chargement...';
   const pick = () => allNames[Math.floor(Math.random()*151)]; // Gen 1
   try{
-    const [d1, d2] = await Promise.all([fetchPokemon(pick()), fetchPokemon(pick())]);
-    const f1 = buildFighter(d1, 50); f1.rawMoves = d1.moves.map(m => m.move.url);
-    const f2 = buildFighter(d2, 50); f2.rawMoves = d2.moves.map(m => m.move.url);
-    await Promise.all([autoMoves(f1), autoMoves(f2)]);
-    fighter1 = f1; fighter2 = f2;
-    customizer.style.display = 'none'; // démarrage direct
-    startBattle();
+    if(teamMode){
+      const lvl = parseInt(lvlInput.value, 10) || 50;
+      const [mine, theirs] = await Promise.all([randomTeamFighters(lvl), randomTeamFighters(lvl)]);
+      myTeam = mine; foeTeam = theirs;
+      renderTeamSlots();
+      startTeamBattle();
+    } else {
+      const [d1, d2] = await Promise.all([fetchPokemon(pick()), fetchPokemon(pick())]);
+      const f1 = buildFighter(d1, 50); f1.rawMoves = d1.moves.map(m => m.move.url);
+      const f2 = buildFighter(d2, 50); f2.rawMoves = d2.moves.map(m => m.move.url);
+      await Promise.all([autoMoves(f1), autoMoves(f2)]);
+      fighter1 = f1; fighter2 = f2;
+      customizer.style.display = 'none'; // démarrage direct
+      startBattle();
+    }
   }finally{
     b.disabled = false; b.textContent = '🎲 Combat aléatoire';
   }
 };
+
+// ============ Events équipe ============
+function setMode(team){
+  teamMode = team;
+  document.getElementById('modeSolo').classList.toggle('active', !team);
+  document.getElementById('modeTeam').classList.toggle('active', team);
+  document.getElementById('teamPanel').style.display = team ? 'block' : 'none';
+  document.getElementById('oppBox').style.display = team ? 'none' : 'block';
+  checkReady();
+}
+document.getElementById('modeSolo').onclick = () => setMode(false);
+document.getElementById('modeTeam').onclick = () => setMode(true);
+document.getElementById('addToTeam').onclick = () => {
+  if(!fighter1 || myTeam.length >= 6) return;
+  if(customizer.style.display === 'block'){
+    refreshPreview1();
+    if(fighter1.learnset) movesFromSelects(fighter1);
+  }
+  myTeam.push(snapshotFighter(fighter1));
+  renderTeamSlots();
+};
+document.getElementById('randTeam').onclick = async () => {
+  const b = document.getElementById('randTeam');
+  b.disabled = true; b.textContent = '⏳...';
+  try{
+    const lvl = parseInt(lvlInput.value, 10) || 50;
+    const need = 6 - myTeam.length;
+    const rand = await randomTeamFighters(lvl);
+    myTeam.push(...rand.slice(0, need));
+    renderTeamSlots();
+  }finally{ b.disabled = false; b.textContent = '🎲 Remplir aléatoirement'; }
+};
+document.getElementById('clearTeam').onclick = () => { myTeam = []; renderTeamSlots(); };
+document.getElementById('switchBtn').onclick = () => {
+  if(!yourTurn || gameOver) return;
+  pendingSwitch = true; yourTurn = false; setMovesEnabled(false);
+  showTeamChooser();
+};
+document.getElementById('teamChooserCancel').onclick = () => {
+  pendingSwitch = false;
+  document.getElementById('teamChooser').style.display = 'none';
+  yourTurn = true; setMovesEnabled(true);
+};
+renderTeamSlots();
 
 loadNames();
 </script>
