@@ -163,6 +163,7 @@
   .team-choice:disabled { opacity:.35; cursor:default; }
   .tc-hp { width:80px; height:6px; background:#333; border-radius:3px; overflow:hidden; }
   .tc-hp span { display:block; height:100%; background:#4ade4a; }
+.status-badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;color:#fff;vertical-align:middle;margin-left:6px;text-shadow:0 1px 2px rgba(0,0,0,.5);box-shadow:0 1px 4px rgba(0,0,0,.4)}
 </style>
 </head>
 <body>
@@ -369,13 +370,142 @@ function frMoveName(m){
   return MOVES_FR[m.name] || m.name.replace(/-/g,' ');
 }
 
+// ============ STATUTS ============
+const STATUS_AILMENTS = ['paralysis','sleep','poison','burn','freeze','confusion'];
+const STATUS_FR = {paralysis:'Paralysie', sleep:'Sommeil', poison:'Poison', burn:'Brûlure', freeze:'Gel', confusion:'Confusion'};
+const STATUS_ICON = {paralysis:'⚡', sleep:'💤', poison:'☠️', burn:'🔥', freeze:'❄️', confusion:'💫'};
+const STATUS_COLOR = {paralysis:'#c9a227', sleep:'#8a97a3', poison:'#a33ea1', burn:'#ee8130', freeze:'#6390f0', confusion:'#b06bd6'};
+const STATUS_MSG = {paralysis:'est paralysé ! ⚡', sleep:"s'endort ! 💤", poison:'est empoisonné ! ☠️', burn:'est brûlé ! 🔥', freeze:'est gelé ! ❄️', confusion:'est confus ! 💫'};
+const STATUS_IMMUNE_TYPES = {paralysis:['électrik'], burn:['feu'], freeze:['glace'], poison:['poison','acier']};
+
+function statusBadge(f){
+  if(!f || !f.status) return '';
+  return ` <span class="status-badge" style="background:${STATUS_COLOR[f.status]}">${STATUS_ICON[f.status]} ${STATUS_FR[f.status]}</span>`;
+}
+function refreshStatusBadges(){
+  const yn = document.getElementById('youName'), fn = document.getElementById('foeName');
+  if(!yn || !fn || !you || !foe) return;
+  yn.innerHTML = `${you.name} N.${you.level}${statusBadge(you)}`;
+  fn.innerHTML = `${foe.name} N.${foe.level}${statusBadge(foe)}`;
+}
+function effSpeed(f){ return f.status === 'paralysis' ? f.speed / 2 : f.speed; }
+function canStatusApply(ailment, defender){
+  if(defender.status) return false;
+  const imm = STATUS_IMMUNE_TYPES[ailment];
+  if(imm && imm.some(t => defender.types.includes(t))) return false;
+  return true;
+}
+function clearStatus(f){ f.status = null; f.statusTurns = 0; }
+
+// Vérifie avant une attaque si le Pokémon peut agir (sommeil, gel, paralysie, confusion)
+async function statusGate(f, label, side){
+  if(f.status === 'sleep'){
+    f.statusTurns--;
+    if(f.statusTurns <= 0){
+      clearStatus(f); refreshBars();
+      log(`${label} se réveille !`); await sleep(500); return true;
+    }
+    log(`${label} dort profondément... 💤`, '#9aa7b0'); await sleep(650); return false;
+  }
+  if(f.status === 'freeze'){
+    if(Math.random() < 0.2){
+      clearStatus(f); refreshBars();
+      log(`${label} n'est plus gelé !`); await sleep(500); return true;
+    }
+    log(`${label} est gelé... il ne peut pas bouger ! ❄️`, '#6390f0'); await sleep(650); return false;
+  }
+  if(f.status === 'paralysis' && Math.random() < 0.25){
+    log(`${label} est paralysé... il ne peut pas attaquer ! ⚡`, '#c9a227'); await sleep(650); return false;
+  }
+  if(f.status === 'confusion'){
+    f.statusTurns--;
+    if(f.statusTurns <= 0){
+      clearStatus(f); refreshBars();
+      log(`${label} n'est plus confus !`); await sleep(400); return true;
+    }
+    if(Math.random() < 0.33){
+      const dmg = Math.max(1, Math.floor(((2 * f.level / 5 + 2) * 40 * f.atk / f.def) / 50 + 2));
+      f.hp = Math.max(0, f.hp - dmg);
+      animImpact(side, {type:'psy'}, 1);
+      dmgFloat(side, dmg, 1);
+      refreshBars();
+      log(`${label} se blesse dans sa confusion ! (-${dmg} PV)`, '#b06bd6');
+      await sleep(650);
+      if(f.hp <= 0) animFaint(side);
+      return false;
+    }
+    log(`${label} est confus... 💫`, '#b06bd6'); await sleep(450);
+  }
+  return true;
+}
+
+// Applique une altération d'état à un Pokémon
+async function applyAilment(defender, ailment, defLabel, defSide){
+  if(!STATUS_AILMENTS.includes(ailment)) return false;
+  if(!canStatusApply(ailment, defender)){
+    log(`${defLabel} ne peut pas être affecté par ${STATUS_FR[ailment]}...`, '#ffaaaa');
+    await sleep(500);
+    return false;
+  }
+  defender.status = ailment;
+  defender.statusTurns = ailment === 'sleep' ? 1 + Math.floor(Math.random() * 3)
+                       : ailment === 'confusion' ? 2 + Math.floor(Math.random() * 3) : 0;
+  const fakeType = {paralysis:'électrik', sleep:'psy', poison:'poison', burn:'feu', freeze:'glace', confusion:'psy'}[ailment];
+  animImpact(defSide, {type: fakeType}, 1);
+  log(`${defLabel} ${STATUS_MSG[ailment]}`, STATUS_COLOR[ailment]);
+  refreshBars();
+  await sleep(650);
+  return true;
+}
+
+// Exécute une attaque de statut (pas de dégâts)
+async function doStatusMove(attacker, defender, move, atkLabel, defLabel, atkSide, defSide){
+  log(`${atkLabel} utilise <b>${move.name}</b> !`);
+  await sleep(350);
+  if(Math.random() * 100 > move.accuracy){
+    const d = spriteEl(defSide);
+    d.classList.remove('dodge'); void d.offsetWidth; d.classList.add('dodge');
+    log(`${atkLabel} utilise <b>${move.name}</b>... mais ça échoue !`, '#ffaaaa');
+    await sleep(550);
+    return;
+  }
+  await animCharge(atkSide, move);
+  if(move.ailment && canStatusApply(move.ailment, defender)){
+    await applyAilment(defender, move.ailment, defLabel, defSide);
+  } else {
+    log(`${atkLabel} utilise <b>${move.name}</b>... mais ça ne fonctionne pas !`, '#ffaaaa');
+    await sleep(500);
+  }
+}
+
+// Dégâts résiduels de fin de tour (poison, brûlure)
+async function endOfTurn(){
+  for(const [f, label, side] of [[you, `Ton ${you.name}`, 'you'], [foe, `Le ${foe.name} adverse`, 'foe']]){
+    if(f.hp <= 0) continue;
+    if(f.status === 'poison' || f.status === 'burn'){
+      const dmg = Math.max(1, Math.floor(f.maxHP / (f.status === 'poison' ? 8 : 16)));
+      f.hp = Math.max(0, f.hp - dmg);
+      animImpact(side, {type: f.status === 'poison' ? 'poison' : 'feu'}, 1);
+      dmgFloat(side, dmg, 1);
+      log(`${label} souffre de ${STATUS_FR[f.status]}... (-${dmg} PV)`, STATUS_COLOR[f.status]);
+      refreshBars();
+      await sleep(650);
+      if(f.hp <= 0){ animFaint(side); await sleep(450); }
+    }
+  }
+}
+
 function moveObj(mv){
+  const meta = mv.meta || {};
+  const ail = meta.ailment && meta.ailment.name !== 'none' ? meta.ailment.name : null;
   return {
     name: frMoveName(mv),
     type: frType(mv.type.name),
     power: mv.power,
     accuracy: mv.accuracy || 100,
     damageClass: mv.damage_class.name,
+    ailment: ail,
+    ailChance: meta.ailment_chance || 0,
     key: mv.name
   };
 }
@@ -424,6 +554,19 @@ async function autoMoves(f){
     const mv = await fetchMoveCached(`${API}/move/${['tackle','scratch','quick-attack','body-slam'][picks.length]}`);
     picks.push(mv);
   }
+  // 35% de chances d'inclure une attaque de statut du learnset
+  if(Math.random() < 0.35){
+    for(const url of [...f.rawMoves].sort(() => Math.random() - .5).slice(0, 25)){
+      try{
+        const mv = await fetchMoveCached(url);
+        const a = mv.meta && mv.meta.ailment && mv.meta.ailment.name;
+        if(mv.damage_class.name === 'status' && a && STATUS_AILMENTS.includes(a)){
+          picks[Math.floor(Math.random() * picks.length)] = mv;
+          break;
+        }
+      }catch(e){}
+    }
+  }
   f.moves = picks.map(moveObj);
 }
 
@@ -434,7 +577,12 @@ async function buildLearnset(rawMoves){
   for(let i = 0; i < urls.length; i += 40){
     const batch = await Promise.all(urls.slice(i, i+40).map(u => fetchMoveCached(u).catch(()=>null)));
     for(const mv of batch){
-      if(mv && mv.power && mv.damage_class.name !== 'status') out.push(mv);
+      if(!mv) continue;
+      if(mv.power && mv.damage_class.name !== 'status') out.push(mv);
+      else if(mv.damage_class.name === 'status'){
+        const a = mv.meta && mv.meta.ailment && mv.meta.ailment.name;
+        if(a && STATUS_AILMENTS.includes(a)) out.push(mv);
+      }
     }
   }
   return out;
@@ -496,7 +644,8 @@ function populateMoveSelects(f){
     const sel = document.getElementById('mv'+i);
     sel.innerHTML = sorted.map((m,idx) => {
       const c = chosen[i] === m.name ? ' selected' : '';
-      return `<option value="${m.name}"${c}>${m.name} — ${m.type} · Puis. ${m.power} · ${m.accuracy}%</option>`;
+      const p = m.power ? `Puis. ${m.power}` : 'Statut';
+      return `<option value="${m.name}"${c}>${m.name} — ${m.type} · ${p} · ${m.accuracy}%</option>`;
     }).join('');
   }
 }
@@ -588,6 +737,7 @@ function refreshBars(){
     fill.className = 'hp-fill' + (pct < 25 ? ' low' : pct < 55 ? ' mid' : '');
     document.getElementById(hpId).textContent = hpText(f);
   }
+  refreshStatusBadges();
 }
 
 function log(msg, color){
@@ -702,7 +852,10 @@ function renderMoves(){
     const b = document.createElement('button');
     b.className = 'move-btn';
     b.style.background = `linear-gradient(${TYPE_COLORS[m.type]}, ${TYPE_COLORS[m.type]}bb)`;
-    b.innerHTML = `${m.name} <span class="move-info">${m.type} · Puissance ${m.power} · Précision ${m.accuracy}%</span>`;
+    const info = m.damageClass === 'status'
+      ? `${m.type} · Statut · Précision ${m.accuracy}%`
+      : `${m.type} · Puissance ${m.power} · Précision ${m.accuracy}%`;
+    b.innerHTML = `${m.name} <span class="move-info">${info}</span>`;
     b.onclick = () => playerAttack(i);
     box.appendChild(b);
   });
@@ -740,6 +893,9 @@ async function doAttack(attacker, defender, move, attackerLabel, defenderLabel, 
   refreshBars();
   log(`${attackerLabel} utilise <b>${move.name}</b> ! ${defenderLabel} perd <b>${dmg}</b> PV.${effMsg(eff)}`,
       eff>=2?'#7dff7d':eff===0?'#ffaaaa':undefined);
+  if(move.ailment && move.ailChance && defender.hp > 0 && Math.random() * 100 < move.ailChance){
+    await applyAilment(defender, move.ailment, defenderLabel, defSide);
+  }
   await sleep(650);
   if(defender.hp <= 0) animFaint(defSide);
   await sleep(450);
@@ -797,12 +953,19 @@ async function playerAttack(i){
   yourTurn = false;
   setMovesEnabled(false);
   const move = you.moves[i];
-  await doAttack(you, foe, move, `Ton ${you.name}`, `le ${foe.name} adverse`, 'you', 'foe');
+  const ok = await statusGate(you, `Ton ${you.name}`, 'you');
+  if(ok){
+    if(move.damageClass === 'status'){
+      await doStatusMove(you, foe, move, `Ton ${you.name}`, `le ${foe.name} adverse`, 'you', 'foe');
+    } else {
+      await doAttack(you, foe, move, `Ton ${you.name}`, `le ${foe.name} adverse`, 'you', 'foe');
+    }
+  }
   if(checkEnd()) return;
   await sleep(350);
-  // tour de l'adversaire : attaque la plus efficace disponible (simple IA)
-  const best = foe.moves.map(m => ({m, e: typeEffect(m.type, you.types)})).sort((a,b)=>b.e-a.e)[0];
-  await doAttack(foe, you, best.m, `Le ${foe.name} adverse`, `ton ${you.name}`, 'foe', 'you');
+  await foeAttackFlow();
+  if(checkEnd()) return;
+  await endOfTurn();
   if(checkEnd()) return;
   yourTurn = true;
   setMovesEnabled(true);
@@ -834,12 +997,28 @@ function beginBattleUI(){
   document.getElementById('fxLayer').innerHTML = '';
 }
 
-function bestFoeMove(){
-  return foe.moves.map(m => ({m, e: typeEffect(m.type, you.types)})).sort((a,b)=>b.e-a.e)[0].m;
+function pickFoeMove(){
+  const statusMv = foe.moves.find(m => m.damageClass === 'status' && m.ailment && canStatusApply(m.ailment, you));
+  if(statusMv && Math.random() < 0.35) return statusMv;
+  const damaging = foe.moves.filter(m => m.damageClass !== 'status');
+  const pool = damaging.length ? damaging : foe.moves;
+  return pool.map(m => ({m, e: typeEffect(m.type, you.types)})).sort((a,b)=>b.e-a.e)[0].m;
+}
+
+// Tour complet de l'adversaire (portes de statut + choix de l'attaque)
+async function foeAttackFlow(){
+  const ok = await statusGate(foe, `Le ${foe.name} adverse`, 'foe');
+  if(!ok) return;
+  const move = pickFoeMove();
+  if(move.damageClass === 'status'){
+    await doStatusMove(foe, you, move, `Le ${foe.name} adverse`, `ton ${you.name}`, 'foe', 'you');
+  } else {
+    await doAttack(foe, you, move, `Le ${foe.name} adverse`, `ton ${you.name}`, 'foe', 'you');
+  }
 }
 
 function firstMoveFlow(){
-  if(you.speed >= foe.speed){
+  if(effSpeed(you) >= effSpeed(foe)){
     log(`Ton ${you.name} est plus rapide, il attaque en premier !`);
     yourTurn = true;
   } else {
@@ -847,7 +1026,7 @@ function firstMoveFlow(){
     yourTurn = false;
     (async () => {
       await sleep(500);
-      await doAttack(foe, you, bestFoeMove(), `Le ${foe.name} adverse`, `ton ${you.name}`, 'foe', 'you');
+      await foeAttackFlow();
       if(!checkEnd()){ yourTurn = true; setMovesEnabled(true); }
     })();
   }
@@ -867,6 +1046,7 @@ function startBattle(){
     applyStats(fighter2);
   }
   you = fighter1; foe = fighter2;
+  clearStatus(you); clearStatus(foe);
   gameOver = false; yourTurn = true;
   beginBattleUI();
   document.getElementById('log').innerHTML = '';
@@ -880,7 +1060,8 @@ function snapshotFighter(f){
     name: f.name, types: [...f.types], sprite: f.sprite, backSprite: f.backSprite,
     base: {...f.base}, level: f.level,
     maxHP: f.maxHP, hp: f.maxHP, atk: f.atk, def: f.def, spa: f.spa, spd: f.spd, speed: f.speed,
-    moves: f.moves.map(m => ({...m})), learnset: f.learnset
+    moves: f.moves.map(m => ({...m})), learnset: f.learnset,
+    status: null, statusTurns: 0
   };
 }
 
@@ -921,8 +1102,9 @@ async function startTeamBattle(){
   btn.disabled = true; btn.textContent = '⏳ Préparation...';
   try{
     const lvl = myTeam[0].level;
-    myTeam.forEach(f => { f.hp = f.maxHP; });
+    myTeam.forEach(f => { f.hp = f.maxHP; clearStatus(f); });
     foeTeam = await randomTeamFighters(lvl);
+    foeTeam.forEach(f => clearStatus(f));
     you = myTeam[0]; foe = foeTeam[0];
     gameOver = false; yourTurn = true;
     beginBattleUI();
@@ -946,7 +1128,7 @@ function showTeamChooser(){
     const pct = Math.max(0, 100 * f.hp / f.maxHP);
     return `<button class="team-choice" data-i="${i}" ${dead || cur ? 'disabled' : ''}>
       <img src="${f.sprite}" alt="${f.name}"><span>${f.name}</span>
-      <small>${dead ? 'K.O.' : f.hp + ' / ' + f.maxHP}</small>
+      <small>${dead ? 'K.O.' : f.hp + ' / ' + f.maxHP}${f.status ? statusBadge(f) : ''}</small>
       <span class="tc-hp"><span style="width:${pct}%"></span></span>
     </button>`;
   }).join('');
@@ -966,8 +1148,11 @@ async function chooseMember(i){
   if(wasSwitch && !gameOver){
     // changer de Pokémon consomme le tour : l'adversaire attaque
     await sleep(400);
-    await doAttack(foe, you, bestFoeMove(), `Le ${foe.name} adverse`, `ton ${you.name}`, 'foe', 'you');
-    if(!checkEnd()){ yourTurn = true; setMovesEnabled(true); }
+    await foeAttackFlow();
+    if(!checkEnd()){
+      await endOfTurn();
+      if(!checkEnd()){ yourTurn = true; setMovesEnabled(true); }
+    }
   } else if(!gameOver){
     yourTurn = true; setMovesEnabled(true);
   }
