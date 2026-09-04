@@ -165,7 +165,7 @@
   .pdeco.back { opacity:.85; font-size:1.5em; }
   .pdeco.front { z-index:14; font-size:1.2em; }
   .psprite {
-    position:absolute; width:54px; height:54px; will-change:transform;
+    position:absolute; left:0; width:54px; height:54px; will-change:transform;
     transition:none; z-index:5;
   }
   .psprite img {
@@ -428,7 +428,7 @@ let dayTimer = null, paused = false, daySpeed = 4500, rushToday = false;
 const normName = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9♀♂. -]/g,'').trim();
 function frName(en){ return FR_NAMES[en] || (en||'').charAt(0).toUpperCase()+en.slice(1); }
 function typeFr(t){ return TYPE_FR[t] || t; }
-function fmt(n){ return n.toLocaleString('fr-FR'); }
+function fmt(n){ return (typeof n==='number' && isFinite(n)) ? n.toLocaleString('fr-FR') : '0'; }
 function toast(msg){
   const w = document.getElementById('toasts');
   const t = document.createElement('div');
@@ -474,12 +474,36 @@ let pickedEmoji = '🏞️';
     if (saved && !confirm('Une sauvegarde existe déjà. La remplacer par un nouveau zoo ?')) return;
     startZoo(inp.value.trim(), pickedEmoji);
   });
-  if (saved_zoo()) { startZoo(null, null, true); }
+  if (saved_zoo()) { setTimeout(()=>startZoo(null, null, true), 0); }
 })();
 function saved_zoo(){ try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); return s && s.name ? s : null; } catch(e){ return null; } }
 
+function sanitizeZoo(){
+  if (!zoo) return;
+  let repaired = false;
+  if (typeof zoo.money !== 'number' || !isFinite(zoo.money)) { zoo.money = 5000; repaired = true; }
+  if (typeof zoo.ticket !== 'number' || !isFinite(zoo.ticket)) { zoo.ticket = 12; repaired = true; }
+  if (!Array.isArray(zoo.pens)) { zoo.pens = []; repaired = true; }
+  if (!zoo.staff || typeof zoo.staff !== 'object') { zoo.staff = {keeper:0,guide:0,vet:0}; repaired = true; }
+  if (!Array.isArray(zoo.log)) zoo.log = [];
+  zoo.pens.forEach(p=>{
+    if (!Array.isArray(p.residents)) p.residents = [];
+    if (!p.cap) p.cap = PEN_BASE_CAP;
+    if (!p.uid) p.uid = Date.now() + Math.floor(Math.random()*999);
+    if (!p.accepts) { const pt = PEN_TYPES.find(t=>t.id===p.type); p.accepts = pt ? pt.types.slice() : []; }
+    p.residents.forEach(r=>{
+      if (typeof r.happy !== 'number' || !isFinite(r.happy)) r.happy = 70;
+      r.happy = Math.max(0, Math.min(100, r.happy));
+      if (!r.sprite && r.id) r.sprite = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/' + r.id + '.png';
+      if (typeof r.bt !== 'number' || !isFinite(r.bt)) r.bt = 300;
+      if (!r.typeBadges) r.typeBadges = '';
+    });
+  });
+  if (repaired) logLine('🔧 Sauvegarde réparée automatiquement — le zoo peut continuer !');
+}
+
 function startZoo(name, emoji, fromSave){
-  if (fromSave) { zoo = saved_zoo(); }
+  if (fromSave) { zoo = saved_zoo(); sanitizeZoo(); }
   else {
     zoo = {
       name, emoji, day:1, money:5000, ticket:12,
@@ -520,6 +544,7 @@ document.querySelectorAll('.speed-btn').forEach(b=>{
 /* ---------- Fin de journée ---------- */
 function nextDay(){
   if (paused || !zoo) return;
+  if (typeof zoo.money !== 'number' || !isFinite(zoo.money)) zoo.money = 5000;
   zoo.day++;
   let income = 0, costs = 0;
 
@@ -846,7 +871,7 @@ let lifeRAF = null, lifeLast = 0;
 function startLifeLoop(){ if (lifeRAF) return; lifeLast = performance.now(); lifeRAF = requestAnimationFrame(tickLife); }
 function tickLife(ts){
   const dt = Math.min(0.25, (ts - lifeLast)/1000); lifeLast = ts;
-  document.querySelectorAll('.pen-scene').forEach(scene=>{
+  document.querySelectorAll('.pen-scene').forEach(scene=>{ try{
     const uid = +scene.dataset.pen;
     const pen = penById(uid); if (!pen) return;
     const life = lifeFor(uid);
@@ -936,7 +961,7 @@ function tickLife(ts){
       img.style.transform = asleep ? `rotate(-90deg) translateY(-9px) scale(${scl*.92})` : `scaleX(${flip}) scale(${scl})`;
       bub.textContent = asleep ? '💤' : (st.state === 'eat' ? '😋' : '');
     });
-  });
+  }catch(e){} });
   lifeRAF = requestAnimationFrame(tickLife);
 }
 
@@ -954,6 +979,7 @@ const _syncMood = setInterval(()=>{
 
 /* ---------- Actions ---------- */
 window.feedOne = function(penUid, pid){
+  if (typeof zoo.money !== 'number' || !isFinite(zoo.money)) { zoo.money = 5000; renderAll(); }
   const pen = penById(penUid); if (!pen) return;
   const r = pen.residents.find(x=>x.id===pid); if (!r) return;
   if (zoo.money < 10) return toast('💸 Pas assez d\'argent pour nourrir !');
@@ -978,7 +1004,8 @@ window.sellOne = function(penUid, pid){
   const pen = penById(penUid); if (!pen) return;
   const i = pen.residents.findIndex(x=>x.id===pid); if (i<0) return;
   const r = pen.residents[i];
-  const refund = Math.round(r.price * (0.4 + r.happy/100*0.25));
+  const base = (typeof r.price==='number' && isFinite(r.price)) ? r.price : ((r.bt ?? 300) * 2);
+  const refund = Math.max(50, Math.round(base * (0.4 + r.happy/100*0.25)));
   if (!confirm(`Vendre ${r.name} pour ${fmt(refund)} ₽ ?`)) return;
   pen.residents.splice(i,1);
   zoo.money += refund;
@@ -1060,7 +1087,7 @@ async function doAdoptSearch(){
 }
 
 /* ---------- Sauvegarde ---------- */
-function save(){ try { localStorage.setItem(SAVE_KEY, JSON.stringify(zoo)); } catch(e){} }
+function save(){ try { if (!zoo) return; localStorage.setItem(SAVE_KEY, JSON.stringify(zoo)); } catch(e){} }
 window.addEventListener('beforeunload', save);
 
 /* ---------- Réinitialisation ---------- */
